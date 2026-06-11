@@ -12,6 +12,7 @@ import { CalendarPage }    from '@/components/pages/CalendarPage'
 import { InsightsPage }    from '@/components/pages/InsightsPage'
 import { AnalyticsPage }   from '@/components/pages/AnalyticsPage'
 import { SettingsPage }    from '@/components/pages/SettingsPage'
+import { ToastContainer }  from '@/components/ui/toast'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -48,6 +49,7 @@ export default function App() {
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <ToastContainer />
       </BrowserRouter>
     </QueryClientProvider>
   )

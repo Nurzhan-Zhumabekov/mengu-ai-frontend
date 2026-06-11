@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Calendar, AlertCircle, User } from 'lucide-react'
+import { Plus, Calendar, AlertCircle, User, X } from 'lucide-react'
 import { Topbar } from '@/components/layout/Sidebar'
 import { Spinner } from '@/components/ui'
 import { tasksService } from '@/services/api'
@@ -14,10 +14,18 @@ const COLUMNS: { status: TaskStatus; label: string; color: string }[] = [
   { status: 'cancelled',   label: 'Cancelled',      color: 'bg-red-400' },
 ]
 
+interface NewTaskForm {
+  title: string
+  description: string
+  due_date: string
+}
+
 export function TasksPage() {
   const [myTasks, setMyTasks] = useState(false)
   const [overdueOnly, setOverdueOnly] = useState(false)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [showNewTask, setShowNewTask] = useState(false)
+  const [form, setForm] = useState<NewTaskForm>({ title: '', description: '', due_date: '' })
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
@@ -29,6 +37,15 @@ export function TasksPage() {
     mutationFn: ({ id, patch }: { id: string; patch: Partial<Task> }) =>
       tasksService.update(id, patch),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
+  })
+
+  const createMutation = useMutation({
+    mutationFn: (payload: Partial<Task>) => tasksService.create(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] })
+      setShowNewTask(false)
+      setForm({ title: '', description: '', due_date: '' })
+    },
   })
 
   const tasks = data?.data ?? []
@@ -43,7 +60,7 @@ export function TasksPage() {
       <Topbar
         title="Tasks"
         actions={
-          <button className="btn-primary">
+          <button onClick={() => setShowNewTask(true)} className="btn-primary">
             <Plus size={14} /> New Task
           </button>
         }
@@ -96,7 +113,6 @@ export function TasksPage() {
                   key={status}
                   className="flex flex-col bg-gray-50 rounded-xl border border-gray-200 overflow-hidden"
                 >
-                  {/* Column header */}
                   <div className="flex items-center justify-between px-3 py-2.5 bg-white border-b border-gray-100">
                     <div className="flex items-center gap-2">
                       <div className={`w-2 h-2 rounded-full ${color}`} />
@@ -108,8 +124,6 @@ export function TasksPage() {
                       {colTasks.length}
                     </span>
                   </div>
-
-                  {/* Cards */}
                   <div className="flex-1 overflow-y-auto p-2 space-y-2">
                     {colTasks.length === 0 ? (
                       <div className="text-center py-6 text-xs text-gray-400">No tasks</div>
@@ -141,6 +155,80 @@ export function TasksPage() {
             setSelectedTask(null)
           }}
         />
+      )}
+
+      {/* New Task Modal */}
+      {showNewTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/20" onClick={() => setShowNewTask(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6 z-50">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-medium text-gray-900">New Task</h3>
+              <button onClick={() => setShowNewTask(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (!form.title.trim()) return
+                createMutation.mutate({
+                  title: form.title,
+                  description: form.description || undefined,
+                  due_date: form.due_date || undefined,
+                })
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Title *</label>
+                <input
+                  value={form.title}
+                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                  className="input-field"
+                  placeholder="What needs to be done?"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Description</label>
+                <textarea
+                  value={form.description}
+                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                  className="input-field resize-none"
+                  rows={3}
+                  placeholder="Optional details..."
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Due Date</label>
+                <input
+                  type="date"
+                  value={form.due_date}
+                  onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))}
+                  className="input-field"
+                />
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="submit"
+                  disabled={createMutation.isPending || !form.title.trim()}
+                  className="btn-primary flex-1 justify-center"
+                >
+                  {createMutation.isPending ? <Spinner className="text-white w-4 h-4" /> : null}
+                  Create Task
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowNewTask(false)}
+                  className="btn-secondary flex-1 justify-center"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -175,7 +263,6 @@ function TaskCard({ task, onClick, selected }: TaskCardProps) {
         </div>
       )}
 
-      {/* Footer */}
       <div className="flex items-center justify-between mt-2">
         <div className={`flex items-center gap-1 text-[11px] ${overdue ? 'text-red-500' : 'text-gray-400'}`}>
           {overdue && <AlertCircle size={11} />}
@@ -210,12 +297,7 @@ function TaskDrawer({ task, onClose, onUpdate }: TaskDrawerProps) {
       <div className="relative w-[380px] bg-white border-l border-gray-200 h-full overflow-y-auto shadow-xl z-50">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <h3 className="text-sm font-medium text-gray-900">Task Details</h3>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 text-lg leading-none"
-          >
-            ×
-          </button>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
         </div>
 
         <div className="p-5 space-y-4">
@@ -244,7 +326,6 @@ function TaskDrawer({ task, onClose, onUpdate }: TaskDrawerProps) {
             )}
           </div>
 
-          {/* Quick actions */}
           <div className="pt-2 space-y-2">
             <div className="text-xs text-gray-500 mb-2">Change Status</div>
             {COLUMNS.map(({ status, label }) =>

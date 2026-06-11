@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Sparkles, Clock, Building2, Brain, CheckCircle, XCircle, AlertTriangle, RotateCw, FileText, Mail } from 'lucide-react'
 import { Topbar } from '@/components/layout/Sidebar'
 import { Card, Spinner } from '@/components/ui'
+import { toast } from '@/components/ui/toast'
 import { eventsService, draftsService } from '@/services/api'
 import { timeAgo, eventStatusClass, formatDateTime, actionStatusClass, actionStatusLabel, draftStatusLabel } from '@/utils/helpers'
 import type { EventStatus, FullEvent, ActionLog, Draft } from '@/types'
@@ -18,6 +19,7 @@ const STATUS_FILTERS: { label: string; value: EventStatus | 'all' }[] = [
 export function InboxPage() {
   const [statusFilter, setStatusFilter] = useState<EventStatus | 'all'>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [processingAll, setProcessingAll] = useState(false)
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
@@ -46,15 +48,40 @@ export function InboxPage() {
   })
 
   const events = data?.data ?? []
+  const newCount = events.filter((e) => e.status === 'new').length
+
+  async function handleProcessAll() {
+    if (processingAll || newCount === 0) return
+    setProcessingAll(true)
+    const newEvents = events.filter((e) => e.status === 'new')
+    for (const e of newEvents) {
+      try {
+        await eventsService.reanalyze(e.id)
+      } catch {
+        // ignore individual failures
+      }
+    }
+    setProcessingAll(false)
+    queryClient.invalidateQueries({ queryKey: ['events'] })
+    toast(`Processed ${newEvents.length} events`, 'success')
+  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <Topbar
         title="Inbox AI"
         actions={
-          <button className="btn-primary">
-            <Sparkles size={14} />
-            Process All
+          <button
+            onClick={handleProcessAll}
+            disabled={processingAll || newCount === 0}
+            className="btn-primary"
+          >
+            {processingAll ? (
+              <Spinner className="text-white w-4 h-4" />
+            ) : (
+              <Sparkles size={14} />
+            )}
+            {processingAll ? 'Processing...' : `Process All (${newCount})`}
           </button>
         }
       />
@@ -66,7 +93,7 @@ export function InboxPage() {
           <div className="flex items-center gap-2.5 px-4 py-3 bg-pink-50 border-b border-pink-100">
             <Sparkles size={14} className="text-magenta-500" />
             <span className="text-xs text-magenta-600 font-medium">
-              AI processed {events.filter((e) => e.status === 'completed').length} events · {events.filter((e) => e.status === 'new').length} awaiting analysis
+              AI processed {events.filter((e) => e.status === 'completed').length} events · {newCount} awaiting analysis
             </span>
           </div>
 
@@ -84,9 +111,7 @@ export function InboxPage() {
               >
                 {f.label}
                 {f.value === 'new' && (
-                  <span className="ml-1.5 bg-white/30 rounded-full px-1">
-                    {events.filter((e) => e.status === 'new').length}
-                  </span>
+                  <span className="ml-1.5 bg-white/30 rounded-full px-1">{newCount}</span>
                 )}
               </button>
             ))}
@@ -180,7 +205,6 @@ interface EventDetailProps {
 function EventDetail({ event, onReanalyze, reanalyzing, onApproveDraft, approvingDraft }: EventDetailProps) {
   return (
     <div className="p-6 space-y-4">
-      {/* Header */}
       <div>
         <div className="flex items-center gap-2 mb-1">
           <span className={eventStatusClass(event.status)}>{event.status}</span>
@@ -204,14 +228,12 @@ function EventDetail({ event, onReanalyze, reanalyzing, onApproveDraft, approvin
         </div>
       </div>
 
-      {/* Raw content */}
       <Card title="Email Content">
         <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
           {event.raw_content}
         </p>
       </Card>
 
-      {/* Attachments */}
       {event.metadata.attachments && event.metadata.attachments.length > 0 && (
         <Card title="Attachments">
           <div className="space-y-2">
@@ -228,7 +250,6 @@ function EventDetail({ event, onReanalyze, reanalyzing, onApproveDraft, approvin
         </Card>
       )}
 
-      {/* AI Analysis */}
       {event.analysis ? (
         <Card title="AI Analysis" className="bg-pink-50 border-pink-100">
           <div className="flex items-center gap-2 mb-3">
@@ -269,7 +290,6 @@ function EventDetail({ event, onReanalyze, reanalyzing, onApproveDraft, approvin
         </Card>
       )}
 
-      {/* Action Logs */}
       {event.action_logs && event.action_logs.length > 0 && (
         <Card title="Action Logs">
           <div className="space-y-2">
@@ -280,7 +300,6 @@ function EventDetail({ event, onReanalyze, reanalyzing, onApproveDraft, approvin
         </Card>
       )}
 
-      {/* Drafts */}
       {event.analysis?.actions.some((a) => a.type === 'send_email_draft') && (
         <DraftSection
           eventId={event.id}
@@ -289,7 +308,6 @@ function EventDetail({ event, onReanalyze, reanalyzing, onApproveDraft, approvin
         />
       )}
 
-      {/* Actions */}
       <div className="flex gap-2 flex-wrap pt-2">
         <button
           onClick={onReanalyze}

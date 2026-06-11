@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { Shield, Bell, Plug, Users, CreditCard } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Shield, Bell, Plug, Users, CreditCard, CheckCircle } from 'lucide-react'
 import { Topbar } from '@/components/layout/Sidebar'
-import { Card } from '@/components/ui'
+import { Card, Spinner } from '@/components/ui'
+import { toast } from '@/components/ui/toast'
 import { useAuthStore } from '@/store'
 
 const TABS = [
@@ -13,14 +14,14 @@ const TABS = [
 ]
 
 const INTEGRATIONS = [
-  { name: 'Gmail',           desc: 'Inbound email processing',        status: 'connected',    icon: '📧' },
-  { name: 'Google Calendar', desc: 'Automatic meeting creation',       status: 'disconnected', icon: '📅' },
-  { name: 'Microsoft Outlook',desc: 'Corporate email',                status: 'disconnected', icon: '📮' },
-  { name: 'Slack',           desc: 'Channel notifications',           status: 'disconnected', icon: '💬' },
-  { name: 'Notion',          desc: 'Knowledge base for RAG',          status: 'disconnected', icon: '📝' },
-  { name: '1C:Enterprise',   desc: 'Document flow & finance',         status: 'disconnected', icon: '🏢' },
-  { name: 'Platonus',        desc: 'Educational platform (KZ)',        status: 'disconnected', icon: '🎓' },
-  { name: 'Bitrix24',        desc: 'CRM and tasks',                   status: 'disconnected', icon: '📊' },
+  { name: 'Gmail',           desc: 'Inbound email processing',        status: 'connected' as const,    icon: '\uD83D\uDCE7' },
+  { name: 'Google Calendar', desc: 'Automatic meeting creation',       status: 'disconnected' as const, icon: '\uD83D\uDCC5' },
+  { name: 'Microsoft Outlook',desc: 'Corporate email',                status: 'disconnected' as const, icon: '\uD83D\uDCEB' },
+  { name: 'Slack',           desc: 'Channel notifications',           status: 'disconnected' as const, icon: '\uD83D\uDCAC' },
+  { name: 'Notion',          desc: 'Knowledge base for RAG',          status: 'disconnected' as const, icon: '\uD83D\uDCDD' },
+  { name: '1C:Enterprise',   desc: 'Document flow & finance',         status: 'disconnected' as const, icon: '\uD83C\uDFE2' },
+  { name: 'Platonus',        desc: 'Educational platform (KZ)',        status: 'disconnected' as const, icon: '\uD83C\uDF93' },
+  { name: 'Bitrix24',        desc: 'CRM and tasks',                   status: 'disconnected' as const, icon: '\uD83D\uDCCA' },
 ]
 
 export function SettingsPage() {
@@ -63,23 +64,55 @@ export function SettingsPage() {
   )
 }
 
-// ─── Tabs ─────────────────────────────────────────────────────────────────────
+// ─── Profile Tab ──────────────────────────────────────────────────────────────
 
 function ProfileTab({ user }: { user: { full_name: string; email: string; role: string; department: string } | null }) {
+  const updateUser = useAuthStore((s) => s.updateUser)
+  const [saving, setSaving] = useState(false)
+
+  const [fullName, setFullName] = useState(user?.full_name ?? '')
+  const [department, setDepartment] = useState(user?.department ?? '')
+  const [language, setLanguage] = useState('en')
+  const [replyStyle, setReplyStyle] = useState('formal')
+
+  useEffect(() => {
+    if (user) {
+      setFullName(user.full_name)
+      setDepartment(user.department)
+    }
+  }, [user])
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    await new Promise((r) => setTimeout(r, 400))
+    updateUser({ full_name: fullName, department })
+    setSaving(false)
+    toast('Profile saved', 'success')
+  }
+
   return (
     <Card title="User Profile">
-      <div className="space-y-4 max-w-md">
+      <form onSubmit={handleSave} className="space-y-4 max-w-md">
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1.5">Full Name</label>
-          <input defaultValue={user?.full_name ?? ''} className="input-field" />
+          <input
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className="input-field"
+          />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1.5">Email</label>
-          <input defaultValue={user?.email ?? ''} className="input-field" disabled />
+          <input value={user?.email ?? ''} className="input-field" disabled />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1.5">Department</label>
-          <input defaultValue={user?.department ?? ''} className="input-field" />
+          <input
+            value={department}
+            onChange={(e) => setDepartment(e.target.value)}
+            className="input-field"
+          />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1.5">Role</label>
@@ -89,25 +122,30 @@ function ProfileTab({ user }: { user: { full_name: string; email: string; role: 
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1.5">Interface Language</label>
-          <select className="input-field">
+          <select value={language} onChange={(e) => setLanguage(e.target.value)} className="input-field">
             <option value="en">English</option>
-            <option value="ru">Русский</option>
-            <option value="kk">Қазақша</option>
+            <option value="ru">Russian</option>
+            <option value="kk">Kazakh</option>
           </select>
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1.5">AI Reply Style</label>
-          <select className="input-field">
+          <select value={replyStyle} onChange={(e) => setReplyStyle(e.target.value)} className="input-field">
             <option value="formal">Formal</option>
             <option value="neutral">Neutral</option>
             <option value="friendly">Friendly</option>
           </select>
         </div>
-        <button className="btn-primary">Save Changes</button>
-      </div>
+        <button type="submit" disabled={saving} className="btn-primary">
+          {saving ? <Spinner className="text-white w-4 h-4" /> : <CheckCircle size={14} />}
+          {saving ? 'Saving...' : 'Save Changes'}
+        </button>
+      </form>
     </Card>
   )
 }
+
+// ─── Integrations Tab ─────────────────────────────────────────────────────────
 
 function IntegrationsTab() {
   return (
@@ -145,6 +183,8 @@ function IntegrationsTab() {
   )
 }
 
+// ─── Notifications Tab ────────────────────────────────────────────────────────
+
 function NotificationsTab() {
   const channels = [
     { label: 'Email Notifications', desc: 'Critical events and digest' },
@@ -171,6 +211,8 @@ function NotificationsTab() {
   )
 }
 
+// ─── Security Tab ─────────────────────────────────────────────────────────────
+
 function SecurityTab() {
   return (
     <div className="space-y-4 max-w-md">
@@ -178,7 +220,7 @@ function SecurityTab() {
         <div className="space-y-3">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1.5">Current Password</label>
-            <input type="password" className="input-field" placeholder="••••••••" />
+            <input type="password" className="input-field" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1.5">New Password</label>
@@ -196,8 +238,8 @@ function SecurityTab() {
       <Card title="Active Sessions">
         <div className="space-y-2.5">
           {[
-            { device: 'Chrome — Almaty, KZ', time: 'Now', current: true },
-            { device: 'Mobile Safari — iPhone 15', time: '2 hours ago', current: false },
+            { device: 'Chrome \u2014 Almaty, KZ', time: 'Now', current: true },
+            { device: 'Mobile Safari \u2014 iPhone 15', time: '2 hours ago', current: false },
           ].map((s, i) => (
             <div key={i} className="flex items-center justify-between text-sm">
               <div>
@@ -217,6 +259,8 @@ function SecurityTab() {
   )
 }
 
+// ─── Billing Tab ──────────────────────────────────────────────────────────────
+
 function BillingTab() {
   return (
     <div className="space-y-4">
@@ -224,7 +268,7 @@ function BillingTab() {
         <div className="flex items-center justify-between">
           <div>
             <div className="text-lg font-medium text-gray-900 mb-1">Professional</div>
-            <div className="text-sm text-gray-500">$99 / month · 5 users · SLA 99.9%</div>
+            <div className="text-sm text-gray-500">$99 / month \u00B7 5 users \u00B7 SLA 99.9%</div>
           </div>
           <button className="btn-primary">Upgrade to Enterprise</button>
         </div>
@@ -241,9 +285,9 @@ function BillingTab() {
           </thead>
           <tbody className="divide-y divide-gray-50">
             {[
-              { date: 'June 1, 2026', desc: 'Professional — June', amount: '$99', ok: true },
-              { date: 'May 1, 2026',  desc: 'Professional — May',  amount: '$99', ok: true },
-              { date: 'Apr 1, 2026',  desc: 'Professional — April', amount: '$99', ok: true },
+              { date: 'June 1, 2026', desc: 'Professional \u2014 June', amount: '$99', paid: true },
+              { date: 'May 1, 2026',  desc: 'Professional \u2014 May',  amount: '$99', paid: true },
+              { date: 'Apr 1, 2026',  desc: 'Professional \u2014 April', amount: '$99', paid: true },
             ].map((r, i) => (
               <tr key={i}>
                 <td className="py-2 text-gray-600">{r.date}</td>

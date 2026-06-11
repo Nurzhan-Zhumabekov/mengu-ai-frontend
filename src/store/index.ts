@@ -11,6 +11,7 @@ interface AuthStore {
   isAuthenticated: boolean
   login: (res: AuthResponse) => void
   logout: () => void
+  updateUser: (patch: Partial<User>) => void
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -33,6 +34,7 @@ export const useAuthStore = create<AuthStore>()(
         localStorage.removeItem('mengu_token')
         set({ user: null, token: null, refreshToken: null, isAuthenticated: false })
       },
+      updateUser: (patch) => set((s) => ({ user: s.user ? { ...s.user, ...patch } : null })),
     }),
     {
       name: 'mengu-auth',

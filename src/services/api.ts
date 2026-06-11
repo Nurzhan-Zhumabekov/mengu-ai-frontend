@@ -56,7 +56,7 @@ api.interceptors.response.use(
 
 // ─── Toggle: real API vs mock ─────────────────────────────────────────────────
 
-const USE_MOCK = true
+const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false'
 const delay = (ms = 400) => new Promise((r) => setTimeout(r, ms))
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
@@ -122,6 +122,9 @@ export const organizationService = {
     return data
   },
 }
+
+// In-memory store for uploaded docs
+const UPLOADED_DOCS: DocumentAnalysis[] = []
 
 // ─── Events ───────────────────────────────────────────────────────────────────
 
@@ -208,6 +211,33 @@ export const eventsService = {
     const { data } = await api.get(`/events/${id}/calendar-events`)
     return data
   },
+
+  async getAllUploadedDocs(): Promise<DocumentAnalysis[]> {
+    if (USE_MOCK) {
+      await delay(200)
+      return [...MOCK_DOCUMENTS, ...UPLOADED_DOCS]
+    }
+    return []
+  },
+
+  async uploadDocument(fileName: string, fileSize: number): Promise<DocumentAnalysis> {
+    if (USE_MOCK) {
+      await delay(600)
+      const doc: DocumentAnalysis = {
+        id: `upload_${Date.now()}`,
+        org_id: 'org_123',
+        event_id: `upload_event_${Date.now()}`,
+        file_name: fileName,
+        summary: 'AI analysis in progress...',
+        risks: [],
+        analyzed_at: new Date().toISOString(),
+      }
+      UPLOADED_DOCS.push(doc)
+      return doc
+    }
+    const { data } = await api.post('/events/upload', { file_name: fileName, file_size: fileSize })
+    return data
+  },
 }
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
@@ -243,6 +273,27 @@ export const tasksService = {
       return { ...task, ...patch }
     }
     const { data } = await api.patch(`/tasks/${id}`, patch)
+    return data
+  },
+
+  async create(payload: Partial<Task>): Promise<Task> {
+    if (USE_MOCK) {
+      await delay()
+      const newTask: Task = {
+        id: `task_${Date.now()}`,
+        org_id: 'org_123',
+        event_id: '',
+        title: payload.title ?? '',
+        description: payload.description,
+        status: 'new',
+        assignee_id: payload.assignee_id,
+        due_date: payload.due_date,
+        created_at: new Date().toISOString(),
+      }
+      MOCK_TASKS.push(newTask)
+      return newTask
+    }
+    const { data } = await api.post('/tasks', payload)
     return data
   },
 }
@@ -295,6 +346,11 @@ export const insightsService = {
 
 // ─── Analytics ─────────────────────────────────────────────────────────────────
 
+interface TimeSeriesPoint { date: string; count: number }
+interface StatusCount { name: string; value: number }
+interface WorkloadItem { name: string; tasks: number }
+interface AccuracyItem { category: string; accuracy: number; target: number }
+
 export const analyticsService = {
   async getSummary(): Promise<AnalyticsSummary> {
     if (USE_MOCK) {
@@ -302,6 +358,65 @@ export const analyticsService = {
       return MOCK_ANALYTICS
     }
     const { data } = await api.get('/analytics/summary')
+    return data
+  },
+
+  async getEventsTimeSeries(): Promise<TimeSeriesPoint[]> {
+    if (USE_MOCK) {
+      await delay(300)
+      const now = Date.now()
+      return Array.from({ length: 30 }, (_, i) => {
+        const d = new Date(now - (29 - i) * 86400000)
+        return { date: d.toISOString().slice(0, 10), count: 10 + Math.floor(Math.random() * 40) }
+      })
+    }
+    const { data } = await api.get('/analytics/events-timeseries')
+    return data
+  },
+
+  async getTasksByStatus(): Promise<StatusCount[]> {
+    if (USE_MOCK) {
+      await delay(300)
+      return [
+        { name: 'New', value: MOCK_TASKS.filter((t) => t.status === 'new').length },
+        { name: 'In Progress', value: MOCK_TASKS.filter((t) => t.status === 'in_progress').length },
+        { name: 'Done', value: MOCK_TASKS.filter((t) => t.status === 'done').length },
+        { name: 'Cancelled', value: MOCK_TASKS.filter((t) => t.status === 'cancelled').length },
+      ]
+    }
+    const { data } = await api.get('/analytics/tasks-by-status')
+    return data
+  },
+
+  async getTeamWorkload(): Promise<WorkloadItem[]> {
+    if (USE_MOCK) {
+      await delay(300)
+      return [
+        { name: 'Dilnaz', tasks: 4 },
+        { name: 'Aidar', tasks: 7 },
+        { name: 'Aya', tasks: 2 },
+        { name: 'Yerlan', tasks: 5 },
+        { name: 'Moldir', tasks: 3 },
+        { name: 'Ruslan', tasks: 6 },
+      ]
+    }
+    const { data } = await api.get('/analytics/team-workload')
+    return data
+  },
+
+  async getAiAccuracy(): Promise<AccuracyItem[]> {
+    if (USE_MOCK) {
+      await delay(300)
+      return [
+        { category: 'Intent Detection', accuracy: 94, target: 95 },
+        { category: 'Entity Extraction', accuracy: 91, target: 93 },
+        { category: 'Sentiment Analysis', accuracy: 88, target: 92 },
+        { category: 'Document Summary', accuracy: 96, target: 94 },
+        { category: 'Action Selection', accuracy: 90, target: 93 },
+        { category: 'Draft Quality', accuracy: 87, target: 90 },
+      ]
+    }
+    const { data } = await api.get('/analytics/ai-accuracy')
     return data
   },
 }

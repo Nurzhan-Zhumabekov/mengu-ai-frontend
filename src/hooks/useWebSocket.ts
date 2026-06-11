@@ -30,7 +30,8 @@ export function useWebSocket() {
   const connect = useCallback(() => {
     if (!isAuthenticated || !token) return
 
-    const url = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/v1?token=${token}`
+    const wsBase = import.meta.env.VITE_WS_URL ?? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}`
+    const url = `${wsBase}/ws/v1?token=${token}`
     const ws = new WebSocket(url)
     wsRef.current = ws
 

@@ -1,11 +1,12 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Sparkles, TrendingUp, Users, FileX, AlertCircle, ArrowRight } from 'lucide-react'
+import { Sparkles, TrendingUp, Users, FileX, AlertCircle, ArrowRight, X } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Topbar } from '@/components/layout/Sidebar'
 import { Card, Spinner } from '@/components/ui'
-import { analyticsService, eventsService, insightsService } from '@/services/api'
-import { timeAgo, eventStatusClass } from '@/utils/helpers'
-import type { AIInsight, IncomingEvent } from '@/types'
+import { analyticsService, eventsService, insightsService, tasksService } from '@/services/api'
+import { timeAgo, eventStatusClass, formatDue, isOverdue } from '@/utils/helpers'
+import type { AIInsight, IncomingEvent, Task } from '@/types'
 
 const INSIGHT_ICONS: Record<string, { icon: React.ReactNode; colorClass: string }> = {
   contract_signing_ignore: {
@@ -28,6 +29,7 @@ const INSIGHT_ICONS: Record<string, { icon: React.ReactNode; colorClass: string 
 
 export function DashboardPage() {
   const navigate = useNavigate()
+  const [chatOpen, setChatOpen] = useState(false)
 
   const { data: analytics, isLoading: loadingAnalytics } = useQuery({
     queryKey: ['analytics'],
@@ -44,7 +46,15 @@ export function DashboardPage() {
     queryFn: insightsService.getAll,
   })
 
+  const { data: tasksData } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: () => tasksService.getAll(),
+  })
+
   const events = eventsData?.data.slice(0, 4) ?? []
+  const allTasks = tasksData?.data ?? []
+
+  const priorities = derivePriorities(allTasks)
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -52,7 +62,10 @@ export function DashboardPage() {
 
       <div className="flex-1 overflow-y-auto p-6">
         {/* Ask Mengu bar */}
-        <div className="flex items-center gap-3 bg-white border border-magenta-300 rounded-xl px-4 py-3 mb-5 cursor-pointer hover:border-magenta-400 transition-colors">
+        <div
+          onClick={() => setChatOpen(true)}
+          className="flex items-center gap-3 bg-white border border-magenta-300 rounded-xl px-4 py-3 mb-5 cursor-pointer hover:border-magenta-400 transition-colors"
+        >
           <Sparkles size={18} className="text-magenta-500 flex-shrink-0" />
           <span className="text-sm text-gray-400">
             Ask Mengu anything... e.g. &ldquo;What&rsquo;s most important today?&rdquo;
@@ -141,30 +154,61 @@ export function DashboardPage() {
 
         {/* Top 3 priorities */}
         <Card title="Top 3 Priorities Today">
-          <div className="grid grid-cols-3 gap-3">
-            <PriorityItem
-              label="URGENT"
-              labelClass="text-magenta-600"
-              title="Sign Q1 financial report for investors"
-              meta="Due 15:00 today"
-            />
-            <PriorityItem
-              label="IMPORTANT"
-              labelClass="text-amber-600"
-              title="Approve integration with Astana IT University"
-              meta="Awaiting CPO for 3 days"
-            />
-            <PriorityItem
-              label="SCHEDULED"
-              labelClass="text-blue-600"
-              title="Halyk Bank Demo — prepare materials"
-              meta="Tomorrow 11:00"
-            />
-          </div>
+          {priorities.length === 0 ? (
+            <div className="text-center py-6 text-sm text-gray-400">No priority tasks</div>
+          ) : (
+            <div className="grid grid-cols-3 gap-3">
+              {priorities.map((p, i) => (
+                <PriorityItem
+                  key={p.task.id}
+                  label={i === 0 ? 'URGENT' : i === 1 ? 'IMPORTANT' : 'SCHEDULED'}
+                  labelClass={i === 0 ? 'text-magenta-600' : i === 1 ? 'text-amber-600' : 'text-blue-600'}
+                  title={p.task.title}
+                  meta={p.meta}
+                />
+              ))}
+            </div>
+          )}
         </Card>
       </div>
+
+      {/* Chat slide-in panel */}
+      {chatOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div className="absolute inset-0 bg-black/20" onClick={() => setChatOpen(false)} />
+          <div className="relative w-[400px] bg-white border-l border-gray-200 h-full shadow-xl z-50 flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <Sparkles size={18} className="text-magenta-500" />
+                <h3 className="text-sm font-medium text-gray-900">Ask Mengu</h3>
+              </div>
+              <button onClick={() => setChatOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="flex-1 flex items-center justify-center p-6">
+              <div className="text-center">
+                <Sparkles size={40} className="text-magenta-300 mx-auto mb-4" />
+                <p className="text-sm text-gray-500">Coming soon</p>
+                <p className="text-xs text-gray-400 mt-1">AI chat assistant is being built</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
+}
+
+function derivePriorities(tasks: Task[]): { task: Task; meta: string }[] {
+  const active = tasks.filter((t) => t.status !== 'done' && t.status !== 'cancelled')
+  const unsorted = active.map((t) => ({
+    task: t,
+    score: isOverdue(t.due_date) ? 3 : t.due_date ? 2 : 1,
+    meta: t.due_date ? formatDue(t.due_date) : 'No deadline',
+  }))
+  unsorted.sort((a, b) => b.score - a.score)
+  return unsorted.slice(0, 3)
 }
 
 function EventRow({ event }: { event: IncomingEvent }) {

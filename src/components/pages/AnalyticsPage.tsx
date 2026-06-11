@@ -1,12 +1,41 @@
 import { useQuery } from '@tanstack/react-query'
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell,
+  BarChart, Bar,
+  RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
+} from 'recharts'
 import { Topbar } from '@/components/layout/Sidebar'
 import { Card, Spinner } from '@/components/ui'
 import { analyticsService } from '@/services/api'
 
+const PIE_COLORS = ['#e11d48', '#f43f5e', '#fb7185', '#fda4af']
+const RADAR_COLORS = { accuracy: '#e11d48', target: '#d1d5db' }
+
 export function AnalyticsPage() {
-  const { data, isLoading } = useQuery({
+  const { data: summary, isLoading: loadingSummary } = useQuery({
     queryKey: ['analytics'],
     queryFn: analyticsService.getSummary,
+  })
+
+  const { data: timeSeries, isLoading: loadingTS } = useQuery({
+    queryKey: ['analytics', 'timeseries'],
+    queryFn: analyticsService.getEventsTimeSeries,
+  })
+
+  const { data: tasksByStatus } = useQuery({
+    queryKey: ['analytics', 'tasks-by-status'],
+    queryFn: analyticsService.getTasksByStatus,
+  })
+
+  const { data: workload } = useQuery({
+    queryKey: ['analytics', 'workload'],
+    queryFn: analyticsService.getTeamWorkload,
+  })
+
+  const { data: accuracy } = useQuery({
+    queryKey: ['analytics', 'accuracy'],
+    queryFn: analyticsService.getAiAccuracy,
   })
 
   return (
@@ -14,7 +43,7 @@ export function AnalyticsPage() {
       <Topbar title="Analytics" />
 
       <div className="flex-1 overflow-y-auto p-6 space-y-5">
-        {isLoading ? (
+        {loadingSummary ? (
           <div className="flex justify-center pt-12"><Spinner /></div>
         ) : (
           <>
@@ -22,21 +51,21 @@ export function AnalyticsPage() {
             <div className="grid grid-cols-4 gap-3">
               <KpiCard
                 label="On-Time Tasks"
-                value={`${data?.tasks_on_time_pct}%`}
+                value={`${summary?.tasks_on_time_pct}%`}
                 target="Target: 98%"
-                status={data && data.tasks_on_time_pct >= 98 ? 'good' : 'warn'}
+                status={summary && summary.tasks_on_time_pct >= 98 ? 'good' : 'warn'}
               />
               <KpiCard
                 label="Response Time"
-                value={`${data?.avg_response_time_minutes} min`}
-                target="↓ was 28 min"
+                value={`${summary?.avg_response_time_minutes} min`}
+                target="down from 28 min manual"
                 status="good"
               />
               <KpiCard
                 label="AI Accuracy"
-                value={`${data?.ai_accuracy_pct}%`}
+                value={`${summary?.ai_accuracy_pct}%`}
                 target="Target: 95%+"
-                status={data && data.ai_accuracy_pct >= 95 ? 'good' : 'warn'}
+                status={summary && summary.ai_accuracy_pct >= 95 ? 'good' : 'warn'}
               />
               <KpiCard
                 label="Platform Uptime"
@@ -46,19 +75,82 @@ export function AnalyticsPage() {
               />
             </div>
 
-            {/* Charts placeholder */}
+            {/* Charts */}
             <div className="grid grid-cols-2 gap-4">
               <Card title="Incoming Events (30 days)">
-                <ChartPlaceholder label="Recharts LineChart — /api/v1/analytics/events-timeseries" />
+                {loadingTS ? (
+                  <div className="flex justify-center py-8"><Spinner /></div>
+                ) : (
+                  <div className="h-52">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={timeSeries}>
+                        <XAxis dataKey="date" tick={{ fontSize: 10 }} tickFormatter={(v: string) => v.slice(5)} />
+                        <YAxis tick={{ fontSize: 10 }} />
+                        <Tooltip />
+                        <Line type="monotone" dataKey="count" stroke="#e11d48" strokeWidth={2} dot={false} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
               </Card>
+
               <Card title="Tasks by Status">
-                <ChartPlaceholder label="Recharts PieChart — /api/v1/analytics/tasks-by-status" />
+                <div className="h-52 flex items-center justify-center">
+                  {tasksByStatus && tasksByStatus.some((d) => d.value > 0) ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={tasksByStatus}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={70}
+                          label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                        >
+                          {tasksByStatus.map((_, i) => (
+                            <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <span className="text-xs text-gray-400">No data</span>
+                  )}
+                </div>
               </Card>
+
               <Card title="Team Workload">
-                <ChartPlaceholder label="Recharts BarChart — /api/v1/analytics/team-workload" />
+                <div className="h-52">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={workload}>
+                      <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                      <YAxis tick={{ fontSize: 10 }} />
+                      <Tooltip />
+                      <Bar dataKey="tasks" fill="#e11d48" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </Card>
+
               <Card title="AI Accuracy by Category">
-                <ChartPlaceholder label="Recharts RadarChart — /api/v1/analytics/ai-accuracy" />
+                <div className="h-52">
+                  {accuracy ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RadarChart data={accuracy}>
+                        <PolarGrid />
+                        <PolarAngleAxis dataKey="category" tick={{ fontSize: 10 }} />
+                        <PolarRadiusAxis tick={{ fontSize: 9 }} domain={[0, 100]} />
+                        <Radar name="Accuracy" dataKey="accuracy" stroke={RADAR_COLORS.accuracy} fill={RADAR_COLORS.accuracy} fillOpacity={0.3} />
+                        <Radar name="Target" dataKey="target" stroke={RADAR_COLORS.target} fill={RADAR_COLORS.target} fillOpacity={0.1} />
+                        <Tooltip />
+                      </RadarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="flex justify-center py-8"><Spinner /></div>
+                  )}
+                </div>
               </Card>
             </div>
 
@@ -74,13 +166,13 @@ export function AnalyticsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  <TableRow label="Events Today" value={`${data?.events_today}`} target="—" ok />
-                  <TableRow label="Auto-Processed" value={`${data?.events_auto_processed}`} target="—" ok />
-                  <TableRow label="Active Tasks" value={`${data?.active_tasks}`} target="—" ok />
-                  <TableRow label="Overdue Tasks" value={`${data?.overdue_tasks}`} target="0" ok={data?.overdue_tasks === 0} />
-                  <TableRow label="Open Documents" value={`${data?.open_documents}`} target="—" ok />
-                  <TableRow label="On-Time Tasks" value={`${data?.tasks_on_time_pct}%`} target="98%" ok={data ? data.tasks_on_time_pct >= 98 : false} />
-                  <TableRow label="AI Accuracy" value={`${data?.ai_accuracy_pct}%`} target="95%+" ok={data ? data.ai_accuracy_pct >= 95 : false} />
+                  <TableRow label="Events Today" value={`${summary?.events_today}`} target="—" ok />
+                  <TableRow label="Auto-Processed" value={`${summary?.events_auto_processed}`} target="—" ok />
+                  <TableRow label="Active Tasks" value={`${summary?.active_tasks}`} target="—" ok />
+                  <TableRow label="Overdue Tasks" value={`${summary?.overdue_tasks}`} target="0" ok={summary?.overdue_tasks === 0} />
+                  <TableRow label="Open Documents" value={`${summary?.open_documents}`} target="—" ok />
+                  <TableRow label="On-Time Tasks" value={`${summary?.tasks_on_time_pct}%`} target="98%" ok={summary ? summary.tasks_on_time_pct >= 98 : false} />
+                  <TableRow label="AI Accuracy" value={`${summary?.ai_accuracy_pct}%`} target="95%+" ok={summary ? summary.ai_accuracy_pct >= 95 : false} />
                 </tbody>
               </table>
             </Card>
@@ -103,14 +195,6 @@ function KpiCard({ label, value, target, status }: {
   )
 }
 
-function ChartPlaceholder({ label }: { label: string }) {
-  return (
-    <div className="h-40 flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-200">
-      <p className="text-xs text-gray-400 text-center max-w-[200px] leading-relaxed">{label}</p>
-    </div>
-  )
-}
-
 function TableRow({ label, value, target, ok }: {
   label: string; value: string; target: string; ok: boolean
 }) {
@@ -121,7 +205,7 @@ function TableRow({ label, value, target, ok }: {
       <td className="py-2 text-xs text-gray-400 text-right">{target}</td>
       <td className="py-2 text-right">
         <span className={`text-xs ${ok ? 'text-emerald-600' : 'text-amber-600'}`}>
-          {ok ? '✓' : '↑'}
+          {ok ? '\u2713' : '\u2191'}
         </span>
       </td>
     </tr>
