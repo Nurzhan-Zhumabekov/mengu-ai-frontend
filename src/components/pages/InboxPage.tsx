@@ -16,6 +16,12 @@ const STATUS_FILTERS: { label: string; value: EventStatus | 'all' }[] = [
   { label: 'Failed', value: 'failed' },
 ]
 
+const SOURCE_LABELS: Record<string, string> = {
+  email: 'Email',
+  api: 'API',
+  webhook: 'Webhook',
+}
+
 export function InboxPage() {
   const [statusFilter, setStatusFilter] = useState<EventStatus | 'all'>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -151,7 +157,7 @@ export function InboxPage() {
                         {event.status}
                       </span>
                       <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">
-                        {event.source}
+                        {SOURCE_LABELS[event.source] ?? event.source}
                       </span>
                     </div>
                   </div>
@@ -163,8 +169,8 @@ export function InboxPage() {
 
         {/* Right: detail panel */}
         <div className="flex-1 overflow-y-auto">
-          {selectedId && fullEvent ? (
-            loadingDetail ? (
+          {selectedId ? (
+            loadingDetail || !fullEvent ? (
               <div className="flex justify-center py-16"><Spinner /></div>
             ) : (
               <EventDetail

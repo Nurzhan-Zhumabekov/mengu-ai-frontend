@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   FileText, AlertTriangle, Upload, X, File,
@@ -126,31 +126,37 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
   const [dragOver, setDragOver] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const handleFile = useCallback((f: File) => {
+  function handleFileSelect(f: File) {
     setFile(f)
     setProgress(0)
-    setUploading(true)
+    setUploading(false)
+  }
 
+  function handleUploadClick() {
+    if (!file || uploading) return
+    setUploading(true)
     let p = 0
     const interval = setInterval(() => {
       p += Math.random() * 15 + 5
       if (p >= 100) {
         p = 100
         clearInterval(interval)
-        finalize(f)
+        finalize(file)
       }
       setProgress(Math.min(p, 100))
     }, 200)
-  }, [])
+  }
 
   async function finalize(f: File) {
     try {
       await eventsService.uploadDocument(f.name, f.size)
-      toast(`Uploaded ${f.name}`, 'success')
+      toast(`${f.name} uploaded successfully`, 'success')
       onUploaded()
       onClose()
     } catch {
-      toast('Upload failed', 'error')
+      toast('Upload failed. Please try again.', 'error')
+      setUploading(false)
+      setProgress(0)
     }
   }
 
@@ -158,7 +164,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
     e.preventDefault()
     setDragOver(false)
     const f = e.dataTransfer.files[0]
-    if (f) handleFile(f)
+    if (f) handleFileSelect(f)
   }
 
   return (
@@ -172,7 +178,7 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
           </button>
         </div>
 
-        {!uploading && !file && (
+        {!file && (
           <div
             onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
             onDragLeave={() => setDragOver(false)}
@@ -191,9 +197,31 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0]
-                if (f) handleFile(f)
+                if (f) handleFileSelect(f)
               }}
             />
+          </div>
+        )}
+
+        {file && !uploading && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-pink-50 flex items-center justify-center flex-shrink-0">
+                <File size={20} className="text-pink-700" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-gray-900 truncate">{file.name}</div>
+                <div className="text-xs text-gray-400">{formatFileSize(file.size)}</div>
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button onClick={handleUploadClick} className="btn-primary flex-1 justify-center">
+                <Upload size={14} /> Upload
+              </button>
+              <button onClick={() => { setFile(null); setProgress(0) }} className="btn-secondary flex-1 justify-center">
+                Cancel
+              </button>
+            </div>
           </div>
         )}
 
@@ -208,7 +236,6 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
                 <div className="text-xs text-gray-400">{formatFileSize(file.size)}</div>
               </div>
             </div>
-
             <div>
               <div className="flex justify-between text-xs text-gray-500 mb-1.5">
                 <span>Uploading to AI...</span>
@@ -221,7 +248,6 @@ function UploadModal({ onClose, onUploaded }: { onClose: () => void; onUploaded:
                 />
               </div>
             </div>
-
             {progress === 100 && (
               <p className="text-xs text-emerald-600">Upload complete — AI analysis started</p>
             )}

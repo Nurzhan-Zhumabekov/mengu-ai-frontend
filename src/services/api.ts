@@ -33,7 +33,7 @@ import {
 // ─── Axios instance ───────────────────────────────────────────────────────────
 
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: import.meta.env.VITE_API_URL ?? '/api/v1',
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -205,7 +205,7 @@ export const eventsService = {
   async getCalendarEvents(id: string): Promise<PaginatedResponse<CalendarEvent>> {
     if (USE_MOCK) {
       await delay()
-      const mockCalendarEvents = MOCK_CALENDAR_EVENTS.filter(() => true)
+      const mockCalendarEvents = MOCK_CALENDAR_EVENTS.filter((e) => e.event_id === id)
       return { data: mockCalendarEvents, total: mockCalendarEvents.length, page: 1, per_page: 20, has_more: false }
     }
     const { data } = await api.get(`/events/${id}/calendar-events`)

@@ -4,6 +4,7 @@ import { Topbar } from '@/components/layout/Sidebar'
 import { Card, Spinner } from '@/components/ui'
 import { toast } from '@/components/ui/toast'
 import { useAuthStore } from '@/store'
+import type { User } from '@/types'
 
 const TABS = [
   { id: 'profile',      label: 'Profile',      icon: Users },
@@ -68,7 +69,7 @@ export function SettingsPage() {
 
 // ─── Profile Tab ──────────────────────────────────────────────────────────────
 
-function ProfileTab({ user }: { user: { full_name: string; email: string; role: string; department: string } | null }) {
+function ProfileTab({ user }: { user: User | null }) {
   const updateUser = useAuthStore((s) => s.updateUser)
   const [saving, setSaving] = useState(false)
 
@@ -218,20 +219,54 @@ function NotificationsTab() {
 // ─── Security Tab ─────────────────────────────────────────────────────────────
 
 function SecurityTab() {
+  const [currentPw, setCurrentPw] = useState('')
+  const [newPw, setNewPw] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function handlePasswordChange(e: React.FormEvent) {
+    e.preventDefault()
+    if (!currentPw || !newPw || newPw.length < 8) return
+    setSaving(true)
+    await new Promise((r) => setTimeout(r, 600))
+    setSaving(false)
+    setCurrentPw('')
+    setNewPw('')
+    toast('Password updated successfully', 'success')
+  }
+
   return (
     <div className="space-y-4 max-w-md">
       <Card title="Change Password">
-        <div className="space-y-3">
+        <form onSubmit={handlePasswordChange} className="space-y-3">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1.5">Current Password</label>
-            <input type="password" className="input-field" placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" />
+            <input
+              type="password"
+              value={currentPw}
+              onChange={(e) => setCurrentPw(e.target.value)}
+              className="input-field"
+              placeholder="Current password"
+            />
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1.5">New Password</label>
-            <input type="password" className="input-field" placeholder="Minimum 8 characters" />
+            <input
+              type="password"
+              value={newPw}
+              onChange={(e) => setNewPw(e.target.value)}
+              className="input-field"
+              placeholder="Minimum 8 characters"
+            />
           </div>
-          <button className="btn-primary">Change Password</button>
-        </div>
+          <button
+            type="submit"
+            disabled={saving || !currentPw || newPw.length < 8}
+            className="btn-primary"
+          >
+            {saving ? <Spinner className="text-white w-4 h-4" /> : null}
+            {saving ? 'Updating...' : 'Change Password'}
+          </button>
+        </form>
       </Card>
       <Card title="Two-Factor Authentication">
         <p className="text-sm text-gray-600 mb-3">

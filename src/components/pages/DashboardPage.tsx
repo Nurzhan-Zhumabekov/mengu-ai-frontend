@@ -211,6 +211,13 @@ function derivePriorities(tasks: Task[]): { task: Task; meta: string }[] {
   return unsorted.slice(0, 3)
 }
 
+const EVENT_STATUS_LABELS: Record<string, string> = {
+  new: 'New',
+  processing: 'Processing',
+  completed: 'Completed',
+  failed: 'Failed',
+}
+
 function EventRow({ event }: { event: IncomingEvent }) {
   return (
     <div className="flex items-start gap-2.5 py-2.5 cursor-pointer hover:bg-gray-50 -mx-4 px-4 rounded-lg transition-colors">
@@ -225,7 +232,7 @@ function EventRow({ event }: { event: IncomingEvent }) {
       <div className="flex flex-col items-end gap-1 flex-shrink-0">
         <span className="text-[11px] text-gray-400">{timeAgo(event.created_at)}</span>
         <span className={eventStatusClass(event.status)}>
-          {event.status}
+          {EVENT_STATUS_LABELS[event.status] ?? event.status}
         </span>
       </div>
     </div>

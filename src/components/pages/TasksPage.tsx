@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Calendar, AlertCircle, User, X } from 'lucide-react'
 import { Topbar } from '@/components/layout/Sidebar'
 import { Spinner } from '@/components/ui'
+import { toast } from '@/components/ui/toast'
+import { useAuthStore } from '@/store'
 import { tasksService } from '@/services/api'
 import { formatDue, isOverdue, taskStatusLabel, isDueSoon } from '@/utils/helpers'
 import type { Task, TaskStatus } from '@/types'
@@ -26,11 +28,14 @@ export function TasksPage() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [showNewTask, setShowNewTask] = useState(false)
   const [form, setForm] = useState<NewTaskForm>({ title: '', description: '', due_date: '' })
+  const { user } = useAuthStore()
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
     queryKey: ['tasks', myTasks, overdueOnly],
-    queryFn: () => tasksService.getAll(),
+    queryFn: () => tasksService.getAll({
+      assignee_id: myTasks && user ? user.id : undefined,
+    }),
   })
 
   const updateMutation = useMutation({
@@ -45,6 +50,7 @@ export function TasksPage() {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
       setShowNewTask(false)
       setForm({ title: '', description: '', due_date: '' })
+      toast('Task created successfully', 'success')
     },
   })
 
@@ -60,7 +66,7 @@ export function TasksPage() {
       <Topbar
         title="Tasks"
         actions={
-          <button onClick={() => setShowNewTask(true)} className="btn-primary">
+          <button onClick={() => { setForm({ title: '', description: '', due_date: '' }); setShowNewTask(true) }} className="btn-primary">
             <Plus size={14} /> New Task
           </button>
         }

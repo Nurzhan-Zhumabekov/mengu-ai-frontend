@@ -146,16 +146,16 @@ export function CalendarPage() {
           </Card>
         )}
 
-        {/* Calendar grid placeholder */}
+        {/* Calendar grid */}
         <Card title="June 2026">
           <div className="grid grid-cols-7 gap-px bg-gray-100 rounded-lg overflow-hidden">
             {['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((d) => (
               <div key={d} className="bg-gray-50 text-center text-[11px] font-medium text-gray-500 py-2">{d}</div>
             ))}
             {Array.from({ length: 35 }, (_, i) => {
-              const day = i - 5 + 1
+              const day = i + 1
               const isToday = day === 11
-              const hasEvent = [12, 14, 18].includes(day)
+              const hasEvent = [12, 15, 18].includes(day)
               return (
                 <div
                   key={i}
@@ -170,7 +170,7 @@ export function CalendarPage() {
                   </div>
                   {hasEvent && day > 0 && day <= 30 && (
                     <div className="w-full bg-magenta-100 text-magenta-700 text-[9px] rounded px-1 py-0.5 truncate">
-                      {day === 12 ? 'Halyk demo' : day === 14 ? 'Dev sync' : 'Investors'}
+                      {day === 12 ? 'Dev Sync' : day === 15 ? 'Contract Review' : 'Halyk Demo'}
                     </div>
                   )}
                 </div>
@@ -178,6 +178,10 @@ export function CalendarPage() {
             })}
           </div>
         </Card>
+
+        <p className="text-center text-xs text-gray-400 mt-2">
+          Click an event above to see its calendar entries
+        </p>
       </div>
     </div>
   )

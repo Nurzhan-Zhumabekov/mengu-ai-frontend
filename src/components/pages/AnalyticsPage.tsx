@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell,
+  PieChart, Pie, Cell, Legend,
   BarChart, Bar,
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
 } from 'recharts'
@@ -9,7 +9,7 @@ import { Topbar } from '@/components/layout/Sidebar'
 import { Card, Spinner } from '@/components/ui'
 import { analyticsService } from '@/services/api'
 
-const PIE_COLORS = ['#e11d48', '#f43f5e', '#fb7185', '#fda4af']
+const PIE_COLORS = ['#9CA3AF', '#3B82F6', '#10B981', '#EF4444']
 const RADAR_COLORS = { accuracy: '#e11d48', target: '#d1d5db' }
 
 export function AnalyticsPage() {
@@ -105,14 +105,15 @@ export function AnalyticsPage() {
                           nameKey="name"
                           cx="50%"
                           cy="50%"
-                          outerRadius={70}
-                          label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}
+                          outerRadius={65}
+                          innerRadius={30}
                         >
                           {tasksByStatus.map((_, i) => (
                             <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                           ))}
                         </Pie>
                         <Tooltip />
+                        <Legend iconSize={10} wrapperStyle={{ fontSize: '11px' }} />
                       </PieChart>
                     </ResponsiveContainer>
                   ) : (
@@ -143,7 +144,7 @@ export function AnalyticsPage() {
                         <PolarAngleAxis dataKey="category" tick={{ fontSize: 10 }} />
                         <PolarRadiusAxis tick={{ fontSize: 9 }} domain={[0, 100]} />
                         <Radar name="Accuracy" dataKey="accuracy" stroke={RADAR_COLORS.accuracy} fill={RADAR_COLORS.accuracy} fillOpacity={0.3} />
-                        <Radar name="Target" dataKey="target" stroke={RADAR_COLORS.target} fill={RADAR_COLORS.target} fillOpacity={0.1} />
+                        <Radar name="Target" dataKey="target" stroke="#D1D5DB" fill="#D1D5DB" fillOpacity={0.2} strokeDasharray="4 2" />
                         <Tooltip />
                       </RadarChart>
                     </ResponsiveContainer>
@@ -184,10 +185,10 @@ export function AnalyticsPage() {
 }
 
 function KpiCard({ label, value, target, status }: {
-  label: string; value: string; target: string; status: 'good' | 'warn' | 'bad'
+  label: string; value: string; target: string; status: 'good' | 'warn'
 }) {
   return (
-    <div className={`metric-card border-l-4 ${status === 'good' ? 'border-l-emerald-400' : status === 'warn' ? 'border-l-amber-400' : 'border-l-red-400'}`}>
+    <div className={`metric-card border-l-4 ${status === 'good' ? 'border-l-emerald-400' : 'border-l-amber-400'}`}>
       <div className="text-xs text-gray-500 mb-1.5">{label}</div>
       <div className="text-2xl font-medium text-gray-900">{value}</div>
       <div className={`text-xs mt-1 ${status === 'good' ? 'text-emerald-600' : 'text-amber-600'}`}>{target}</div>

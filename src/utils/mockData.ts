@@ -36,14 +36,14 @@ export const MOCK_ORGANIZATION: Organization = {
 }
 
 export const MOCK_ANALYTICS: AnalyticsSummary = {
-  events_today: 47,
-  events_auto_processed: 12,
-  active_tasks: 23,
-  overdue_tasks: 5,
+  events_today: 4,
+  events_auto_processed: 1,
+  active_tasks: 3,
+  overdue_tasks: 1,
   avg_response_time_minutes: 3.2,
   tasks_on_time_pct: 94,
   ai_accuracy_pct: 92,
-  open_documents: 8,
+  open_documents: 1,
 }
 
 export const MOCK_EVENTS: IncomingEvent[] = [
@@ -285,6 +285,7 @@ export const MOCK_DRAFTS: Draft[] = [
 
 export const MOCK_CALENDAR_EVENTS: CalendarEvent[] = [
   {
+    event_id: 'evt_001',
     title: 'Contract Review Meeting',
     datetime: '2026-06-15T17:00:00Z',
     google_event_id: 'google_cal_evt_001',
@@ -292,6 +293,7 @@ export const MOCK_CALENDAR_EVENTS: CalendarEvent[] = [
     created_at: new Date(Date.now() - 1000 * 60 * 118).toISOString(),
   },
   {
+    event_id: 'evt_003',
     title: 'Halyk Bank Demo',
     datetime: '2026-06-18T11:00:00Z',
     google_event_id: 'google_cal_evt_002',

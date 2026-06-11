@@ -153,6 +153,7 @@ export interface Draft {
 // ─── Calendar Events ──────────────────────────────────────────────────────────
 
 export interface CalendarEvent {
+  event_id: string
   title: string
   datetime: string
   google_event_id?: string

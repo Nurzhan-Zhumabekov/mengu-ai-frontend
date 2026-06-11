@@ -55,9 +55,9 @@ export function InsightsPage() {
 
   const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set())
 
-  const allInsights = (insights ?? []).filter((i) => !resolvedIds.has(i.id))
-  const active   = allInsights.filter((i) => !i.is_resolved)
-  const resolved = allInsights.filter((i) => i.is_resolved)
+  const allInsights = insights ?? []
+  const active   = allInsights.filter((i) => !i.is_resolved && !resolvedIds.has(i.id))
+  const resolved = allInsights.filter((i) => i.is_resolved || resolvedIds.has(i.id))
 
   function handleResolve(id: string) {
     setResolvedIds((prev) => new Set(prev).add(id))
