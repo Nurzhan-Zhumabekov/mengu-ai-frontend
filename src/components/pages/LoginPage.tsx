@@ -95,7 +95,7 @@ export function LoginPage() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">
-                Пароль
+                Password
               </label>
               <input
                 type="password"

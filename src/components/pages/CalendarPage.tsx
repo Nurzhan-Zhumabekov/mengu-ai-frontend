@@ -37,7 +37,10 @@ export function CalendarPage() {
       <Topbar
         title="Calendar"
         actions={
-          <button className="btn-primary">
+          <button
+            onClick={() => window.alert('Calendar integration coming soon')}
+            className="btn-primary"
+          >
             <Calendar size={14} /> Create Event
           </button>
         }

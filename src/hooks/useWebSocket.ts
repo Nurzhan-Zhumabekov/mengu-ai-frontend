@@ -16,10 +16,10 @@ interface WSMessage {
 }
 
 /**
- * useWebSocket — подключается к /ws/v1 и инвалидирует React Query кэш
- * при получении событий от сервера.
+ * useWebSocket — connects to /ws/v1 and invalidates React Query cache
+ * when server events arrive.
  *
- * Использование: вызови один раз в AppLayout или корневом компоненте.
+ * Call once in AppLayout or root component.
  */
 export function useWebSocket() {
   const { token, isAuthenticated } = useAuthStore()

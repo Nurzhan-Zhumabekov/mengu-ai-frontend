@@ -116,7 +116,7 @@ export function Sidebar() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-[13px] font-medium text-white/85 truncate">
-              {user?.full_name ?? 'Пользователь'}
+              {user?.full_name ?? 'User'}
             </div>
             <div className="text-[11px] text-white/40">{user?.role}</div>
           </div>

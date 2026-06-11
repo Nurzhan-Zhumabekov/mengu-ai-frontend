@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { TrendingUp, Users, FileX, AlertCircle, CheckCircle } from 'lucide-react'
+import { TrendingUp, Users, FileX, AlertCircle, CheckCircle, RotateCw } from 'lucide-react'
 import { Topbar } from '@/components/layout/Sidebar'
 import { Card, Spinner } from '@/components/ui'
 import { insightsService } from '@/services/api'
@@ -52,8 +53,15 @@ export function InsightsPage() {
     queryFn: insightsService.getAll,
   })
 
-  const active   = insights?.filter((i) => !i.is_resolved) ?? []
-  const resolved = insights?.filter((i) => i.is_resolved)  ?? []
+  const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set())
+
+  const allInsights = (insights ?? []).filter((i) => !resolvedIds.has(i.id))
+  const active   = allInsights.filter((i) => !i.is_resolved)
+  const resolved = allInsights.filter((i) => i.is_resolved)
+
+  function handleResolve(id: string) {
+    setResolvedIds((prev) => new Set(prev).add(id))
+  }
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -93,7 +101,7 @@ export function InsightsPage() {
           ) : (
             <div className="space-y-3">
               {active.map((insight) => (
-                <InsightCard key={insight.id} insight={insight} />
+                <InsightCard key={insight.id} insight={insight} onResolve={handleResolve} />
               ))}
             </div>
           )}
@@ -120,11 +128,19 @@ export function InsightsPage() {
   )
 }
 
-function InsightCard({ insight }: { insight: AIInsight }) {
+function InsightCard({ insight, onResolve }: { insight: AIInsight; onResolve: (id: string) => void }) {
+  const [resolving, setResolving] = useState(false)
+
   const config = INSIGHT_CONFIG[insight.type] ?? {
     icon: <AlertCircle size={16} />,
     bg: 'bg-gray-100 text-gray-500',
     border: 'border-l-gray-300',
+  }
+
+  async function handleResolve() {
+    setResolving(true)
+    await new Promise((r) => setTimeout(r, 400))
+    onResolve(insight.id)
   }
 
   return (
@@ -142,8 +158,13 @@ function InsightCard({ insight }: { insight: AIInsight }) {
         <p className="text-xs text-gray-600 leading-relaxed">{insight.description}</p>
         <div className="text-[11px] text-gray-400 mt-1.5">{timeAgo(insight.created_at)}</div>
       </div>
-      <button className="text-xs text-magenta-500 hover:text-magenta-600 whitespace-nowrap flex-shrink-0">
-        Resolve →
+      <button
+        onClick={handleResolve}
+        disabled={resolving}
+        className="text-xs text-magenta-500 hover:text-magenta-600 whitespace-nowrap flex-shrink-0 flex items-center gap-1"
+      >
+        {resolving ? <RotateCw size={12} className="animate-spin" /> : null}
+        {resolving ? 'Resolving...' : 'Resolve'}
       </button>
     </div>
   )

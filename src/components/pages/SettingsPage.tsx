@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Shield, Bell, Plug, Users, CreditCard, CheckCircle } from 'lucide-react'
+import { Shield, Bell, Plug, Users, CreditCard, CheckCircle, Mail, Calendar, MessageSquare, BookOpen, Database, GraduationCap, BarChart2 } from 'lucide-react'
 import { Topbar } from '@/components/layout/Sidebar'
 import { Card, Spinner } from '@/components/ui'
 import { toast } from '@/components/ui/toast'
@@ -13,15 +13,17 @@ const TABS = [
   { id: 'billing',      label: 'Billing',     icon: CreditCard },
 ]
 
-const INTEGRATIONS = [
-  { name: 'Gmail',           desc: 'Inbound email processing',        status: 'connected' as const,    icon: '\uD83D\uDCE7' },
-  { name: 'Google Calendar', desc: 'Automatic meeting creation',       status: 'disconnected' as const, icon: '\uD83D\uDCC5' },
-  { name: 'Microsoft Outlook',desc: 'Corporate email',                status: 'disconnected' as const, icon: '\uD83D\uDCEB' },
-  { name: 'Slack',           desc: 'Channel notifications',           status: 'disconnected' as const, icon: '\uD83D\uDCAC' },
-  { name: 'Notion',          desc: 'Knowledge base for RAG',          status: 'disconnected' as const, icon: '\uD83D\uDCDD' },
-  { name: '1C:Enterprise',   desc: 'Document flow & finance',         status: 'disconnected' as const, icon: '\uD83C\uDFE2' },
-  { name: 'Platonus',        desc: 'Educational platform (KZ)',        status: 'disconnected' as const, icon: '\uD83C\uDF93' },
-  { name: 'Bitrix24',        desc: 'CRM and tasks',                   status: 'disconnected' as const, icon: '\uD83D\uDCCA' },
+interface Integration { name: string; desc: string; status: 'connected' | 'disconnected'; icon: React.ReactNode }
+
+const INTEGRATIONS: Integration[] = [
+  { name: 'Gmail',           desc: 'Inbound email processing',        status: 'connected',    icon: <Mail size={20} /> },
+  { name: 'Google Calendar', desc: 'Automatic meeting creation',       status: 'disconnected', icon: <Calendar size={20} /> },
+  { name: 'Microsoft Outlook',desc: 'Corporate email',                status: 'disconnected', icon: <Mail size={20} /> },
+  { name: 'Slack',           desc: 'Channel notifications',           status: 'disconnected', icon: <MessageSquare size={20} /> },
+  { name: 'Notion',          desc: 'Knowledge base for RAG',          status: 'disconnected', icon: <BookOpen size={20} /> },
+  { name: '1C:Enterprise',   desc: 'Document flow & finance',         status: 'disconnected', icon: <Database size={20} /> },
+  { name: 'Platonus',        desc: 'Educational platform (KZ)',        status: 'disconnected', icon: <GraduationCap size={20} /> },
+  { name: 'Bitrix24',        desc: 'CRM and tasks',                   status: 'disconnected', icon: <BarChart2 size={20} /> },
 ]
 
 export function SettingsPage() {
@@ -158,7 +160,9 @@ function IntegrationsTab() {
           key={intg.name}
           className="flex items-center gap-4 bg-white border border-gray-100 rounded-lg px-4 py-3.5"
         >
-          <span className="text-2xl w-8 text-center flex-shrink-0">{intg.icon}</span>
+          <div className="w-10 h-10 rounded-lg bg-pink-50 flex items-center justify-center flex-shrink-0 text-magenta-500">
+            {intg.icon}
+          </div>
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-gray-900">{intg.name}</div>
             <div className="text-xs text-gray-500">{intg.desc}</div>
