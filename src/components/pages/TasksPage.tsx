@@ -7,13 +7,16 @@ import { toast } from '@/components/ui/toast'
 import { useAuthStore } from '@/store'
 import { tasksService } from '@/services/api'
 import { formatDue, isOverdue, taskStatusLabel, isDueSoon } from '@/utils/helpers'
+import { useRole } from '@/hooks/useRole'
 import type { Task, TaskStatus } from '@/types'
 
 const COLUMNS: { status: TaskStatus; label: string; color: string }[] = [
-  { status: 'new',         label: 'New',          color: 'bg-gray-400' },
-  { status: 'in_progress', label: 'In Progress',   color: 'bg-blue-400' },
-  { status: 'done',        label: 'Done',          color: 'bg-emerald-400' },
-  { status: 'cancelled',   label: 'Cancelled',      color: 'bg-red-400' },
+  { status: 'new',              label: 'New',               color: 'bg-gray-400' },
+  { status: 'in_progress',      label: 'In Progress',       color: 'bg-blue-400' },
+  { status: 'pending_approval', label: 'Pending Approval',  color: 'bg-amber-400' },
+  { status: 'blocked',          label: 'Blocked',           color: 'bg-red-500' },
+  { status: 'done',             label: 'Done',              color: 'bg-emerald-400' },
+  { status: 'cancelled',        label: 'Cancelled',         color: 'bg-gray-300' },
 ]
 
 interface NewTaskForm {
@@ -29,6 +32,7 @@ export function TasksPage() {
   const [showNewTask, setShowNewTask] = useState(false)
   const [form, setForm] = useState<NewTaskForm>({ title: '', description: '', due_date: '' })
   const { user } = useAuthStore()
+  const { isViewer } = useRole()
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
@@ -66,9 +70,11 @@ export function TasksPage() {
       <Topbar
         title="Tasks"
         actions={
-          <button onClick={() => { setForm({ title: '', description: '', due_date: '' }); setShowNewTask(true) }} className="btn-primary">
-            <Plus size={14} /> New Task
-          </button>
+          !isViewer && (
+            <button onClick={() => { setForm({ title: '', description: '', due_date: '' }); setShowNewTask(true) }} className="btn-primary">
+              <Plus size={14} /> New Task
+            </button>
+          )
         }
       />
 
@@ -111,13 +117,13 @@ export function TasksPage() {
         {isLoading ? (
           <div className="flex justify-center pt-16"><Spinner /></div>
         ) : (
-          <div className="grid grid-cols-4 gap-3 h-full">
+          <div className="flex gap-3 h-full overflow-x-auto pb-2">
             {COLUMNS.map(({ status, label, color }) => {
               const colTasks = tasksByStatus(status)
               return (
                 <div
                   key={status}
-                  className="flex flex-col bg-gray-50 rounded-xl border border-gray-200 overflow-hidden"
+                  className="flex flex-col bg-gray-50 rounded-xl border border-gray-200 overflow-hidden min-w-[280px] w-[280px]"
                 >
                   <div className="flex items-center justify-between px-3 py-2.5 bg-white border-b border-gray-100">
                     <div className="flex items-center gap-2">
@@ -259,8 +265,20 @@ function TaskCard({ task, onClick, selected }: TaskCardProps) {
         selected ? 'border-magenta-400 shadow-sm' : ''
       } ${overdue ? 'border-l-4 border-l-red-400' : dueSoon ? 'border-l-4 border-l-amber-400' : ''}`}
     >
-      <div className="text-[13px] font-medium text-gray-900 leading-snug mb-2">
-        {task.title}
+      <div className="flex justify-between items-start mb-2 gap-2">
+        <div className="text-[13px] font-medium text-gray-900 leading-snug">
+          {task.title}
+        </div>
+        {task.priority && (
+          <span className={`flex-shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm ${
+            task.priority === 'critical' ? 'bg-red-100 text-red-700' :
+            task.priority === 'high' ? 'bg-orange-100 text-orange-700' :
+            task.priority === 'medium' ? 'bg-blue-100 text-blue-700' :
+            'bg-gray-100 text-gray-600'
+          }`}>
+            {task.priority}
+          </span>
+        )}
       </div>
 
       {task.description && (
@@ -296,6 +314,11 @@ interface TaskDrawerProps {
 
 function TaskDrawer({ task, onClose, onUpdate }: TaskDrawerProps) {
   const overdue = isOverdue(task.due_date) && task.status !== 'done' && task.status !== 'cancelled'
+  const { isViewer } = useRole()
+
+  function handleDelegate() {
+    toast('Task delegation is coming soon', 'info')
+  }
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
@@ -324,6 +347,12 @@ function TaskDrawer({ task, onClose, onUpdate }: TaskDrawerProps) {
                 {formatDue(task.due_date)}
               </span>
             </div>
+            {task.priority && (
+              <div className="flex justify-between items-center">
+                <span className="text-gray-500">Priority</span>
+                <span className="text-sm font-medium capitalize text-gray-800">{task.priority}</span>
+              </div>
+            )}
             {task.assignee_id && (
               <div className="flex justify-between items-center">
                 <span className="text-gray-500">Assignee</span>
@@ -332,20 +361,33 @@ function TaskDrawer({ task, onClose, onUpdate }: TaskDrawerProps) {
             )}
           </div>
 
-          <div className="pt-2 space-y-2">
-            <div className="text-xs text-gray-500 mb-2">Change Status</div>
-            {COLUMNS.map(({ status, label }) =>
-              status !== task.status ? (
-                <button
-                  key={status}
-                  onClick={() => onUpdate({ status })}
-                  className="w-full text-left text-sm px-3 py-2 rounded-lg border border-gray-200 hover:border-magenta-300 hover:bg-pink-50 transition-colors"
-                >
-                  → {label}
-                </button>
-              ) : null
-            )}
-          </div>
+          {!isViewer && (
+            <div className="pt-2 space-y-2">
+              <button
+                onClick={handleDelegate}
+                className="w-full text-center text-sm font-medium text-magenta-600 bg-pink-50 hover:bg-pink-100 py-2 rounded-lg transition-colors"
+              >
+                Delegate Task
+              </button>
+            </div>
+          )}
+
+          {!isViewer && (
+            <div className="pt-2 space-y-2">
+              <div className="text-xs text-gray-500 mb-2">Change Status</div>
+              {COLUMNS.map(({ status, label }) =>
+                status !== task.status ? (
+                  <button
+                    key={status}
+                    onClick={() => onUpdate({ status })}
+                    className="w-full text-left text-sm px-3 py-2 rounded-lg border border-gray-200 hover:border-magenta-300 hover:bg-pink-50 transition-colors"
+                  >
+                    → {label}
+                  </button>
+                ) : null
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { Topbar } from '@/components/layout/Sidebar'
 import { Card, Spinner } from '@/components/ui'
 import { toast } from '@/components/ui/toast'
 import { useAuthStore } from '@/store'
+import { useRole } from '@/hooks/useRole'
 import type { User } from '@/types'
 
 const TABS = [
@@ -30,6 +31,19 @@ const INTEGRATIONS: Integration[] = [
 export function SettingsPage() {
   const [activeTab, setActiveTab] = useState('profile')
   const { user } = useAuthStore()
+  const { isViewer, isEmployee } = useRole()
+
+  const visibleTabs = TABS.filter(tab => {
+    if (tab.id === 'billing' && (isViewer || isEmployee)) return false
+    return true
+  })
+
+  // Ensure activeTab is valid if billing was selected but user doesn't have access
+  useEffect(() => {
+    if (activeTab === 'billing' && (isViewer || isEmployee)) {
+      setActiveTab('profile')
+    }
+  }, [isViewer, isEmployee, activeTab])
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -38,7 +52,7 @@ export function SettingsPage() {
       <div className="flex flex-1 overflow-hidden">
         {/* Tabs sidebar */}
         <div className="w-52 min-w-52 border-r border-gray-100 py-4 bg-white overflow-y-auto">
-          {TABS.map(({ id, label, icon: Icon }) => (
+          {visibleTabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
@@ -73,15 +87,15 @@ function ProfileTab({ user }: { user: User | null }) {
   const updateUser = useAuthStore((s) => s.updateUser)
   const [saving, setSaving] = useState(false)
 
-  const [fullName, setFullName] = useState(user?.full_name ?? '')
+  const [fullName, setFullName] = useState(user?.full_name ?? user?.name ?? '')
   const [department, setDepartment] = useState(user?.department ?? '')
   const [language, setLanguage] = useState('en')
   const [replyStyle, setReplyStyle] = useState('formal')
 
   useEffect(() => {
     if (user) {
-      setFullName(user.full_name)
-      setDepartment(user.department)
+      setFullName(user.full_name ?? user.name ?? '')
+      setDepartment(user.department ?? '')
     }
   }, [user])
 
@@ -89,7 +103,7 @@ function ProfileTab({ user }: { user: User | null }) {
     e.preventDefault()
     setSaving(true)
     await new Promise((r) => setTimeout(r, 400))
-    updateUser({ full_name: fullName, department })
+    updateUser({ full_name: fullName, name: fullName, department })
     setSaving(false)
     toast('Profile saved', 'success')
   }

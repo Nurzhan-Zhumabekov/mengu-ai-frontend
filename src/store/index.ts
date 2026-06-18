@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { User, AuthResponse } from '@/types'
+import type { User, AuthResponse, Notification } from '@/types'
 
 // ─── Auth Store ───────────────────────────────────────────────────────────────
 
@@ -52,16 +52,69 @@ export const useAuthStore = create<AuthStore>()(
 
 interface UIStore {
   sidebarCollapsed: boolean
+  sidebarMobileOpen: boolean
   toggleSidebar: () => void
+  setSidebarMobileOpen: (open: boolean) => void
+  darkMode: boolean
+  toggleDarkMode: () => void
   activeModal: string | null
   openModal: (id: string) => void
   closeModal: () => void
+  commandPaletteOpen: boolean
+  setCommandPaletteOpen: (open: boolean) => void
+  // Notifications
+  notifications: Notification[]
+  notificationsPanelOpen: boolean
+  setNotificationsPanelOpen: (open: boolean) => void
+  addNotification: (n: Notification) => void
+  markAsRead: (id: string) => void
+  markAllAsRead: () => void
+  unreadCount: () => number
 }
 
-export const useUIStore = create<UIStore>((set) => ({
-  sidebarCollapsed: false,
-  toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
-  activeModal: null,
-  openModal: (id) => set({ activeModal: id }),
-  closeModal: () => set({ activeModal: null }),
-}))
+export const useUIStore = create<UIStore>()(
+  persist(
+    (set, get) => ({
+      sidebarCollapsed: false,
+      sidebarMobileOpen: false,
+      toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+      setSidebarMobileOpen: (open) => set({ sidebarMobileOpen: open }),
+      darkMode: false,
+      toggleDarkMode: () => {
+        const next = !get().darkMode
+        if (next) {
+          document.documentElement.classList.add('dark')
+        } else {
+          document.documentElement.classList.remove('dark')
+        }
+        set({ darkMode: next })
+      },
+      activeModal: null,
+      openModal: (id) => set({ activeModal: id }),
+      closeModal: () => set({ activeModal: null }),
+      commandPaletteOpen: false,
+      setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
+      // Notifications
+      notifications: [],
+      notificationsPanelOpen: false,
+      setNotificationsPanelOpen: (open) => set({ notificationsPanelOpen: open }),
+      addNotification: (n) => set((s) => ({ notifications: [n, ...s.notifications].slice(0, 50) })),
+      markAsRead: (id) =>
+        set((s) => ({
+          notifications: s.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
+        })),
+      markAllAsRead: () =>
+        set((s) => ({
+          notifications: s.notifications.map((n) => ({ ...n, read: true })),
+        })),
+      unreadCount: () => get().notifications.filter((n) => !n.read).length,
+    }),
+    {
+      name: 'mengu-ui',
+      partialize: (s) => ({
+        darkMode: s.darkMode,
+        sidebarCollapsed: s.sidebarCollapsed,
+      }),
+    }
+  )
+)

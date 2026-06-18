@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Zap } from 'lucide-react'
 import { authService } from '@/services/api'
 import { useAuthStore } from '@/store'
@@ -12,6 +12,34 @@ export function LoginPage() {
   const [error, setError] = useState('')
   const { login } = useAuthStore()
   const navigate = useNavigate()
+  const location = useLocation()
+
+  // ── Handle OAuth callback (backend redirects to /login?access_token=...&refresh_token=...) ──
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const oauthError = params.get('error')
+
+    if (oauthError) {
+      const messages: Record<string, string> = {
+        oauth_failed:           'OAuth login failed. Please try again.',
+        missing_params:         'OAuth callback missing parameters.',
+        integration_failed:     'Failed to connect integration.',
+        microsoft_not_configured: 'Microsoft login is not configured yet.',
+        oauth_unavailable:      'OAuth service is unavailable.',
+      }
+      setError(messages[oauthError] ?? 'OAuth error: ' + oauthError)
+      // Clean URL
+      navigate('/login', { replace: true })
+      return
+    }
+
+    const oauthResult = authService.handleOAuthCallback()
+    if (oauthResult) {
+      // OAuth callback with tokens in URL — log user in
+      login(oauthResult)
+      navigate('/', { replace: true })
+    }
+  }, [location.search, login, navigate])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

@@ -6,7 +6,7 @@ import { Card, Spinner } from '@/components/ui'
 import { toast } from '@/components/ui/toast'
 import { eventsService, draftsService } from '@/services/api'
 import { timeAgo, eventStatusClass, formatDateTime, actionStatusClass, actionStatusLabel, draftStatusLabel } from '@/utils/helpers'
-import type { EventStatus, FullEvent, ActionLog, Draft } from '@/types'
+import type { EventStatus, FullEvent, ActionLog, Draft, EventCategory } from '@/types'
 
 const STATUS_FILTERS: { label: string; value: EventStatus | 'all' }[] = [
   { label: 'All', value: 'all' },
@@ -14,6 +14,15 @@ const STATUS_FILTERS: { label: string; value: EventStatus | 'all' }[] = [
   { label: 'Processing', value: 'processing' },
   { label: 'Completed', value: 'completed' },
   { label: 'Failed', value: 'failed' },
+]
+
+const CATEGORY_FILTERS: { label: string; value: EventCategory | 'all' }[] = [
+  { label: 'All Intents', value: 'all' },
+  { label: 'Partnership', value: 'partnership' },
+  { label: 'Contract', value: 'contract' },
+  { label: 'HR', value: 'hr' },
+  { label: 'Support', value: 'support' },
+  { label: 'Other', value: 'other' },
 ]
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -24,13 +33,17 @@ const SOURCE_LABELS: Record<string, string> = {
 
 export function InboxPage() {
   const [statusFilter, setStatusFilter] = useState<EventStatus | 'all'>('all')
+  const [categoryFilter, setCategoryFilter] = useState<EventCategory | 'all'>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [processingAll, setProcessingAll] = useState(false)
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
-    queryKey: ['events', statusFilter],
-    queryFn: () => eventsService.getAll({ status: statusFilter }),
+    queryKey: ['events', statusFilter, categoryFilter],
+    queryFn: () => eventsService.getAll({ 
+      status: statusFilter,
+      category: categoryFilter === 'all' ? undefined : categoryFilter
+    }),
   })
 
   const { data: fullEvent, isLoading: loadingDetail } = useQuery({
@@ -103,24 +116,37 @@ export function InboxPage() {
             </span>
           </div>
 
-          {/* Status tabs */}
-          <div className="flex gap-1 px-3 py-2.5 border-b border-gray-100 overflow-x-auto">
-            {STATUS_FILTERS.map((f) => (
-              <button
-                key={f.value}
-                onClick={() => setStatusFilter(f.value)}
-                className={`text-xs px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${
-                  statusFilter === f.value
-                    ? 'bg-magenta-500 text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
+          {/* Filters */}
+          <div className="flex flex-col gap-2 px-3 py-2.5 border-b border-gray-100">
+            <div className="flex gap-1 overflow-x-auto pb-1 hide-scrollbar">
+              {STATUS_FILTERS.map((f) => (
+                <button
+                  key={f.value}
+                  onClick={() => setStatusFilter(f.value)}
+                  className={`text-xs px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${
+                    statusFilter === f.value
+                      ? 'bg-magenta-500 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {f.label}
+                  {f.value === 'new' && (
+                    <span className="ml-1.5 bg-white/30 rounded-full px-1">{newCount}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center">
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value as EventCategory | 'all')}
+                className="w-full text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-2 py-1.5 outline-none focus:border-magenta-400"
               >
-                {f.label}
-                {f.value === 'new' && (
-                  <span className="ml-1.5 bg-white/30 rounded-full px-1">{newCount}</span>
-                )}
-              </button>
-            ))}
+                {CATEGORY_FILTERS.map(c => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Event list */}
@@ -149,8 +175,20 @@ export function InboxPage() {
                         {timeAgo(event.created_at)}
                       </span>
                     </div>
-                    <div className="text-xs text-gray-600 truncate mb-1">
-                      {event.metadata.subject}
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="text-xs text-gray-600 truncate mr-2">
+                        {event.metadata.subject}
+                      </div>
+                      {event.priority && (
+                        <span className={`flex-shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm ${
+                          event.priority === 'critical' ? 'bg-red-100 text-red-700' :
+                          event.priority === 'high' ? 'bg-orange-100 text-orange-700' :
+                          event.priority === 'medium' ? 'bg-blue-100 text-blue-700' :
+                          'bg-gray-100 text-gray-600'
+                        }`}>
+                          {event.priority}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={eventStatusClass(event.status)}>

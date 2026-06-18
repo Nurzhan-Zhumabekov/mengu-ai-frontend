@@ -1,20 +1,23 @@
 import { useState, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  FileText, AlertTriangle, Upload, X, File,
+  FileText, AlertTriangle, Upload, X, File, CheckCircle, XCircle, Clock
 } from 'lucide-react'
 import { Topbar } from '@/components/layout/Sidebar'
 import { Spinner, Card } from '@/components/ui'
 import { toast } from '@/components/ui/toast'
 import { eventsService } from '@/services/api'
 import { formatDateTime, formatFileSize } from '@/utils/helpers'
+import { useRole } from '@/hooks/useRole'
 import type { DocumentAnalysis } from '@/types'
 
 export function DocumentsPage() {
   const [selectedDoc, setSelectedDoc] = useState<DocumentAnalysis | null>(null)
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null)
   const [showUpload, setShowUpload] = useState(false)
+  const [filter, setFilter] = useState<'all' | 'draft' | 'approved'>('all')
   const queryClient = useQueryClient()
+  const { isViewer } = useRole()
 
   const { data: eventsData } = useQuery({
     queryKey: ['events', 'all'],
@@ -33,11 +36,46 @@ export function DocumentsPage() {
       <Topbar
         title="Document Analysis"
         actions={
-          <button onClick={() => setShowUpload(true)} className="btn-primary">
-            <Upload size={14} /> Upload
-          </button>
+          !isViewer && (
+            <button onClick={() => setShowUpload(true)} className="btn-primary">
+              <Upload size={14} /> Upload
+            </button>
+          )
         }
       />
+
+      <div className="flex items-center gap-2 px-6 py-3 bg-white border-b border-gray-100">
+        <button
+          onClick={() => setFilter('all')}
+          className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+            filter === 'all'
+              ? 'bg-magenta-500 text-white'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          All Documents
+        </button>
+        <button
+          onClick={() => setFilter('draft')}
+          className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+            filter === 'draft'
+              ? 'bg-amber-500 text-white'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          Requires Approval
+        </button>
+        <button
+          onClick={() => setFilter('approved')}
+          className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+            filter === 'approved'
+              ? 'bg-emerald-500 text-white'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}
+        >
+          Approved
+        </button>
+      </div>
 
       <div className="flex-1 flex overflow-hidden">
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -315,6 +353,16 @@ function EventDocumentList({ eventId, subject, sender, createdAt, isSelected, on
 // ─── Document Detail ──────────────────────────────────────────────────────────
 
 function DocDetail({ doc, onClose }: { doc: DocumentAnalysis; onClose: () => void }) {
+  const { isViewer } = useRole()
+  
+  function handleApprove() {
+    toast('Document approved', 'success')
+  }
+
+  function handleReject() {
+    toast('Document rejected', 'success')
+  }
+
   return (
     <div>
       <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100">
@@ -372,6 +420,32 @@ function DocDetail({ doc, onClose }: { doc: DocumentAnalysis; onClose: () => voi
             <span className="text-gray-700">{doc.org_id}</span>
           </div>
         </div>
+
+        <Card title="Approval Timeline" className="mt-4">
+          <div className="relative border-l border-gray-200 ml-2 space-y-4 pb-2">
+            <div className="relative pl-4">
+              <span className="absolute -left-1.5 top-1 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white" />
+              <div className="text-xs font-medium text-gray-900">Document Analyzed</div>
+              <div className="text-[10px] text-gray-500">{formatDateTime(doc.analyzed_at)}</div>
+            </div>
+            <div className="relative pl-4">
+              <span className="absolute -left-1.5 top-1 w-3 h-3 rounded-full bg-amber-400 border-2 border-white" />
+              <div className="text-xs font-medium text-gray-900">Pending Manager Approval</div>
+              <div className="text-[10px] text-gray-500">Current step</div>
+            </div>
+          </div>
+        </Card>
+
+        {!isViewer && (
+          <div className="flex gap-2 pt-2">
+            <button onClick={handleApprove} className="flex-1 btn-primary bg-emerald-500 hover:bg-emerald-600 justify-center gap-1.5">
+              <CheckCircle size={14} /> Approve
+            </button>
+            <button onClick={handleReject} className="flex-1 btn-primary bg-red-500 hover:bg-red-600 justify-center gap-1.5">
+              <XCircle size={14} /> Reject
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

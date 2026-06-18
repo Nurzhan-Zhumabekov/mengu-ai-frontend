@@ -1,0 +1,80 @@
+version: "3.9"
+
+# ─── Mengu AI — Local Development Stack ───────────────────────────────────────
+#
+# Usage:
+#   docker compose up -d db        # start only PostgreSQL
+#   docker compose up -d           # start everything
+#   docker compose logs -f backend # tail backend logs
+#
+# Frontend and backend source directories are mounted as volumes so that
+# hot-reload works without rebuilding the image on every change.
+# Adjust the "build.context" paths if your repo layout differs.
+
+services:
+
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
+  db:
+    image: postgres:16-alpine
+    container_name: mengu_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mengu
+      POSTGRES_PASSWORD: mengu_secret
+      POSTGRES_DB: mengu_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mengu -d mengu_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ── Go Backend ──────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ../../mengu-backend       # adjust if repos are in different paths
+      dockerfile: Dockerfile
+    container_name: mengu_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - ../backend/.env                  # reads the .env we prepared
+    environment:
+      # Override DB host to use the Docker service name
+      DATABASE_URL: postgres://mengu:mengu_secret@db:5432/mengu_db?sslmode=disable
+      DB_HOST: db
+    ports:
+      - "4000:4000"
+    volumes:
+      - ../../mengu-backend:/app         # live code for go run / air
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── React Frontend ───────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ../../mengu-ai-frontend   # adjust if repos are in different paths
+      dockerfile: Dockerfile.dev
+    container_name: mengu_frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    env_file:
+      - ../frontend/.env
+    ports:
+      - "3001:3001"
+    volumes:
+      - ../../mengu-ai-frontend:/app
+      - /app/node_modules               # prevent host node_modules from leaking in
+
+volumes:
+  postgres_data:
