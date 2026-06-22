@@ -106,8 +106,8 @@ export function Sidebar() {
 
         {/* Logo */}
         <div className="px-5 py-5 border-b border-white/8">
-          <img src="/logo-dark.png" alt="Mengu" className="h-10 hidden dark:block" />
-          <img src="/logo-light.png" alt="Mengu" className="h-10 block dark:hidden" />
+          <img src="/logo-dark.png" alt="Mengu" className="h-14 hidden dark:block" />
+          <img src="/logo-light.png" alt="Mengu" className="h-14 block dark:hidden" />
         </div>
 
         {/* Navigation */}
