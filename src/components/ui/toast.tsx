@@ -55,7 +55,9 @@ export function ToastContainer() {
           {iconMap[t.type]}
           <span className="flex-1">{t.message}</span>
           <button
+            type="button"
             onClick={() => setToasts((prev) => prev.filter((x) => x.id !== t.id))}
+            aria-label="Закрыть"
             className="text-white/70 hover:text-white"
           >
             <X size={14} />

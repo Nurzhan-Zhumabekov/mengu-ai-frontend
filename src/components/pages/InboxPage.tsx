@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Sparkles, Clock, Building2, Brain, CheckCircle, XCircle, AlertTriangle, RotateCw, FileText, Mail } from 'lucide-react'
 import { Topbar } from '@/components/layout/Sidebar'
-import { Card, Spinner } from '@/components/ui'
+import { Card, Spinner, Pagination } from '@/components/ui'
 import { toast } from '@/components/ui/toast'
 import { eventsService, draftsService } from '@/services'
 import { timeAgo, eventStatusClass, formatDateTime, actionStatusClass, actionStatusLabel, draftStatusLabel, LIVE_POLL_INTERVAL_MS } from '@/utils/helpers'
@@ -24,13 +24,14 @@ const SOURCE_LABELS: Record<string, string> = {
 
 export function InboxPage() {
   const [statusFilter, setStatusFilter] = useState<EventStatus | 'all'>('all')
+  const [page, setPage] = useState(1)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [processingAll, setProcessingAll] = useState(false)
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
-    queryKey: ['events', statusFilter],
-    queryFn: () => eventsService.getAll({ status: statusFilter }),
+    queryKey: ['events', statusFilter, page],
+    queryFn: () => eventsService.getAll({ status: statusFilter, page }),
     refetchInterval: LIVE_POLL_INTERVAL_MS,
   })
 
@@ -45,12 +46,18 @@ export function InboxPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['event', selectedId] })
     },
+    onError: () => {
+      toast('Не удалось переанализировать событие. Попробуйте снова.', 'error')
+    },
   })
 
   const approveDraftMutation = useMutation({
     mutationFn: (id: string) => draftsService.approve(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['event', selectedId] })
+    },
+    onError: () => {
+      toast('Не удалось одобрить черновик. Попробуйте снова.', 'error')
     },
   })
 
@@ -79,6 +86,7 @@ export function InboxPage() {
         title="Inbox AI"
         actions={
           <button
+            type="button"
             onClick={handleProcessAll}
             disabled={processingAll || newCount === 0}
             className="btn-primary"
@@ -95,7 +103,7 @@ export function InboxPage() {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left: list */}
-        <div className="w-[420px] min-w-[420px] flex flex-col border-r border-gray-100 dark:border-navy-600 overflow-hidden">
+        <div className={`w-full md:w-[420px] md:min-w-[420px] flex flex-col border-r border-gray-100 dark:border-navy-600 overflow-hidden ${selectedId ? 'hidden md:flex' : 'flex'}`}>
           {/* AI banner */}
           <div className="flex items-center gap-2.5 px-4 py-3 bg-pink-50 dark:bg-pink-500/10 border-b border-pink-100 dark:border-pink-500/20">
             <Sparkles size={14} className="text-magenta-500" />
@@ -108,8 +116,9 @@ export function InboxPage() {
           <div className="flex gap-1 px-3 py-2.5 border-b border-gray-100 dark:border-navy-600 overflow-x-auto">
             {STATUS_FILTERS.map((f) => (
               <button
+                type="button"
                 key={f.value}
-                onClick={() => setStatusFilter(f.value)}
+                onClick={() => { setStatusFilter(f.value); setPage(1) }}
                 className={`text-xs px-3 py-1.5 rounded-lg whitespace-nowrap transition-colors ${
                   statusFilter === f.value
                     ? 'bg-magenta-500 text-white'
@@ -166,24 +175,43 @@ export function InboxPage() {
               ))
             )}
           </div>
+
+          {data && data.total > 0 && (
+            <Pagination
+              page={page}
+              perPage={data.per_page}
+              total={data.total}
+              onPageChange={setPage}
+            />
+          )}
         </div>
 
         {/* Right: detail panel */}
-        <div className="flex-1 overflow-y-auto">
+        <div className={`flex-1 overflow-y-auto ${selectedId ? 'block' : 'hidden md:block'}`}>
           {selectedId ? (
-            loadingDetail || !fullEvent ? (
-              <div className="flex justify-center py-16"><Spinner /></div>
-            ) : (
-              <EventDetail
+            <>
+              {/* Mobile back button */}
+              <button
+                type="button"
+                onClick={() => setSelectedId(null)}
+                className="md:hidden flex items-center gap-1.5 px-4 py-2 text-xs text-magenta-500 hover:text-magenta-600 border-b border-gray-100 dark:border-navy-600 w-full bg-white dark:bg-navy-800"
+              >
+                ← Назад к списку
+              </button>
+              {loadingDetail || !fullEvent ? (
+                <div className="flex justify-center py-16"><Spinner /></div>
+              ) : (
+                <EventDetail
                 event={fullEvent}
                 onReanalyze={() => reanalyzeMutation.mutate(fullEvent.event.id)}
                 reanalyzing={reanalyzeMutation.isPending}
                 onApproveDraft={(draftId) => approveDraftMutation.mutate(draftId)}
                 approvingDraft={approveDraftMutation.isPending}
               />
-            )
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-center p-8">
+            )}
+          </>
+        ) : (
+          <div className="flex flex-col items-center justify-center h-full text-center p-8">
               <div className="w-14 h-14 bg-pink-50 dark:bg-pink-500/10 rounded-2xl flex items-center justify-center mb-4">
                 <Sparkles size={24} className="text-magenta-400" />
               </div>
@@ -286,6 +314,7 @@ function EventDetail({ event: fullEvent, onReanalyze, reanalyzing, onApproveDraf
             ))}
           </div>
           <button
+            type="button"
             onClick={onReanalyze}
             disabled={reanalyzing}
             className="mt-3 text-xs text-magenta-500 hover:text-magenta-600 flex items-center gap-1"
@@ -323,6 +352,7 @@ function EventDetail({ event: fullEvent, onReanalyze, reanalyzing, onApproveDraf
 
       <div className="flex gap-2 flex-wrap pt-2">
         <button
+          type="button"
           onClick={onReanalyze}
           disabled={reanalyzing}
           className="btn-primary"
@@ -428,6 +458,9 @@ function DraftCard({ draftId, subject, recipient, status, onApprove, approving }
       queryClient.invalidateQueries({ queryKey: ['draft', draftId] })
       setEditing(false)
     },
+    onError: () => {
+      toast('Не удалось сохранить черновик. Попробуйте снова.', 'error')
+    },
   })
 
   return (
@@ -437,7 +470,7 @@ function DraftCard({ draftId, subject, recipient, status, onApprove, approving }
       </div>
 
       {!expanded ? (
-        <button onClick={() => setExpanded(true)} className="text-xs text-magenta-500 hover:text-magenta-600">
+        <button type="button" onClick={() => setExpanded(true)} className="text-xs text-magenta-500 hover:text-magenta-600">
           View content
         </button>
       ) : isLoading || !fullDraft ? (
@@ -452,13 +485,14 @@ function DraftCard({ draftId, subject, recipient, status, onApprove, approving }
           />
           <div className="flex gap-2 mt-3">
             <button
+              type="button"
               onClick={() => updateDraftMutation.mutate(editBody)}
               disabled={updateDraftMutation.isPending}
               className="btn-primary text-xs py-1.5"
             >
               Save
             </button>
-            <button onClick={() => setEditing(false)} className="btn-secondary text-xs py-1.5">
+            <button type="button" onClick={() => setEditing(false)} className="btn-secondary text-xs py-1.5">
               Cancel
             </button>
           </div>
@@ -471,6 +505,7 @@ function DraftCard({ draftId, subject, recipient, status, onApprove, approving }
           <div className="flex gap-2 mt-3">
             {fullDraft.status === 'pending_approval' && (
               <button
+                type="button"
                 onClick={() => onApprove(draftId)}
                 disabled={approving}
                 className="btn-primary text-xs py-1.5"
@@ -480,6 +515,7 @@ function DraftCard({ draftId, subject, recipient, status, onApprove, approving }
               </button>
             )}
             <button
+              type="button"
               onClick={() => { setEditing(true); setEditBody(fullDraft.body) }}
               className="btn-secondary text-xs py-1.5"
             >

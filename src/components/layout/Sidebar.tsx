@@ -3,8 +3,8 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, Inbox, CheckSquare, FileText,
-  Calendar, Settings,
-  Zap, LogOut, Bell, ChevronDown, CheckCheck, Info, AlertTriangle, AlertCircle, CheckCircle,
+  Calendar, Settings, Shield,
+  LogOut, Bell, ChevronDown, CheckCheck, Info, AlertTriangle, AlertCircle, CheckCircle, Menu, X,
 } from 'lucide-react'
 import { useAuthStore, useNotificationStore } from '@/store'
 import { cn, timeAgo, LIVE_POLL_INTERVAL_MS } from '@/utils/helpers'
@@ -20,6 +20,7 @@ interface NavItem {
 export function Sidebar() {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   const { data: eventsData } = useQuery({
     queryKey: ['events', 'all'],
@@ -54,6 +55,7 @@ export function Sidebar() {
       section: 'System',
       items: [
         { to: '/settings', icon: Settings, label: 'Settings' },
+        ...(user?.role === 'admin' ? [{ to: '/admin', icon: Shield, label: 'Admin' }] : []),
       ],
     },
   ]
@@ -64,77 +66,108 @@ export function Sidebar() {
   }
 
   return (
-    <aside className="flex flex-col w-[220px] min-w-[220px] bg-navy-800 h-screen">
-      {/* Logo */}
-      <div className="px-5 py-5 border-b border-white/8">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-magenta-500 rounded-lg flex items-center justify-center flex-shrink-0">
-            <Zap size={18} className="text-white" />
-          </div>
-          <div>
-            <div className="text-[17px] font-medium text-white leading-tight">Mengu</div>
-            <div className="text-[10px] text-white/40">AI Execution Layer</div>
-          </div>
-        </div>
-      </div>
+    <>
+      {/* Mobile hamburger button */}
+      <button
+        type="button"
+        onClick={() => setMobileOpen(true)}
+        className="md:hidden fixed top-3 left-3 z-50 w-9 h-9 flex items-center justify-center bg-white dark:bg-navy-800 border border-gray-200 dark:border-navy-600 rounded-lg text-gray-500 dark:text-gray-400 shadow-sm"
+        aria-label="Открыть меню"
+      >
+        <Menu size={18} />
+      </button>
 
-      {/* Navigation */}
-      <nav className="flex-1 py-3 overflow-y-auto">
-        {NAV.map((group) => (
-          <div key={group.section} className="mb-1">
-            <div className="px-4 py-2 text-[10px] text-white/30 font-medium uppercase tracking-widest">
-              {group.section}
-            </div>
-            {group.items.map(({ to, icon: Icon, label, badge }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={to === '/'}
-                className={({ isActive }) =>
-                  cn('nav-item', isActive && 'active')
-                }
-              >
-                <Icon size={17} className="flex-shrink-0" />
-                <span className="flex-1">{label}</span>
-                {badge && (
-                  <span className="text-[10px] font-medium bg-magenta-500 text-white px-1.5 py-0.5 rounded-full">
-                    {badge}
-                  </span>
-                )}
-              </NavLink>
-            ))}
-          </div>
-        ))}
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-black/30"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
 
-        {/* Logout */}
+      {/* Sidebar */}
+      <aside
+        className={`
+          flex flex-col w-[220px] min-w-[220px] bg-navy-800 h-screen
+          md:relative md:flex
+          ${mobileOpen ? 'fixed inset-y-0 left-0 z-50' : 'hidden'}
+        `}
+        aria-label="Основная навигация"
+      >
+        {/* Mobile close button */}
         <button
-          onClick={handleLogout}
-          className="nav-item w-full text-left"
+          type="button"
+          onClick={() => setMobileOpen(false)}
+          className="md:hidden absolute top-3 right-3 w-8 h-8 flex items-center justify-center text-white/60 hover:text-white"
+          aria-label="Закрыть меню"
         >
-          <LogOut size={17} className="flex-shrink-0" />
-          <span>Sign Out</span>
+          <X size={18} />
         </button>
-      </nav>
 
-      {/* User footer */}
-      <div className="px-4 py-4 border-t border-white/8">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-full bg-magenta-500 flex items-center justify-center text-xs font-medium text-white flex-shrink-0">
-            {user?.role === 'admin' ? 'A' : 'E'}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[13px] font-medium text-white/85 truncate">
-              {/* The backend has no /me endpoint and never returns name/email
-                  (see services/authService.ts) — only id/org_id/role are
-                  decodable from the JWT, so that's all we can show here. */}
-              {user?.role === 'admin' ? 'Admin' : 'Employee'}
-            </div>
-            <div className="text-[11px] text-white/40 truncate">{user?.id}</div>
-          </div>
-          <ChevronDown size={14} className="text-white/30 flex-shrink-0" />
+        {/* Logo */}
+        <div className="px-5 py-5 border-b border-white/8">
+          <img src="/logo-dark.png" alt="Mengu" className="h-8 hidden dark:block" />
+          <img src="/logo-light.png" alt="Mengu" className="h-8 block dark:hidden" />
         </div>
-      </div>
-    </aside>
+
+        {/* Navigation */}
+        <nav className="flex-1 py-3 overflow-y-auto">
+          {NAV.map((group) => (
+            <div key={group.section} className="mb-1">
+              <div className="px-4 py-2 text-[10px] text-white/30 font-medium uppercase tracking-widest">
+                {group.section}
+              </div>
+              {group.items.map(({ to, icon: Icon, label, badge }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  end={to === '/'}
+                  onClick={() => setMobileOpen(false)}
+                >
+                  {({ isActive }) => (
+                    <div className={cn('nav-item', isActive && 'active')} aria-current={isActive ? 'page' : undefined}>
+                      <Icon size={17} className="flex-shrink-0" />
+                      <span className="flex-1">{label}</span>
+                      {badge && (
+                        <span className="text-[10px] font-medium bg-magenta-500 text-white px-1.5 py-0.5 rounded-full">
+                          {badge}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          ))}
+
+          {/* Logout */}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="nav-item w-full text-left"
+          >
+            <LogOut size={17} className="flex-shrink-0" />
+            <span>Sign Out</span>
+          </button>
+        </nav>
+
+        {/* User footer */}
+        <div className="px-4 py-4 border-t border-white/8">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-full bg-magenta-500 flex items-center justify-center text-xs font-medium text-white flex-shrink-0">
+              {user?.role === 'admin' ? 'A' : 'E'}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[13px] font-medium text-white/85 truncate">
+                {user?.role === 'admin' ? 'Admin' : 'Employee'}
+              </div>
+              <div className="text-[11px] text-white/40 truncate">{user?.id}</div>
+            </div>
+            <ChevronDown size={14} className="text-white/30 flex-shrink-0" />
+          </div>
+        </div>
+      </aside>
+    </>
   )
 }
 
@@ -172,13 +205,11 @@ export function Topbar({ title, actions }: TopbarProps) {
       <h1 className="text-base font-medium text-gray-900 dark:text-gray-100">{title}</h1>
       <div className="ml-auto flex items-center gap-2.5">
         {actions}
-        <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-navy-700 border border-gray-200 dark:border-navy-600 rounded-lg px-3 py-1.5 text-sm text-gray-400 cursor-pointer hover:bg-gray-100 dark:hover:bg-navy-600 transition-colors">
-          <span className="text-gray-400">Search...</span>
-          <kbd className="ml-2 text-[11px] text-gray-400 bg-white dark:bg-navy-800 border border-gray-200 dark:border-navy-600 rounded px-1.5 py-0.5">⌘K</kbd>
-        </div>
         <div ref={notifRef} className="relative">
           <button
+            type="button"
             onClick={() => setNotifOpen(!notifOpen)}
+            aria-label="Уведомления"
             className="relative w-8 h-8 flex items-center justify-center border border-gray-200 dark:border-navy-600 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-navy-700 transition-colors"
           >
             <Bell size={16} />
@@ -194,7 +225,7 @@ export function Topbar({ title, actions }: TopbarProps) {
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-navy-600">
                 <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Notifications</span>
                 {unreadCount > 0 && (
-                  <button onClick={markAllRead} className="text-[11px] text-magenta-500 hover:underline flex items-center gap-1">
+                  <button type="button" onClick={markAllRead} className="text-[11px] text-magenta-500 hover:underline flex items-center gap-1">
                     <CheckCheck size={12} /> Mark all read
                   </button>
                 )}

@@ -109,3 +109,47 @@ export function PriorityDot({ priority }: { priority: string }) {
     <div className={cn('w-2 h-2 rounded-full mt-1.5 flex-shrink-0', PRIORITY_COLORS[priority])} />
   )
 }
+
+// ─── Pagination ────────────────────────────────────────────────────────────────
+
+interface PaginationProps {
+  page: number
+  perPage: number
+  total: number
+  onPageChange: (page: number) => void
+}
+
+export function Pagination({ page, perPage, total, onPageChange }: PaginationProps) {
+  const totalPages = Math.max(1, Math.ceil(total / perPage))
+  const from = total === 0 ? 0 : (page - 1) * perPage + 1
+  const to = Math.min(page * perPage, total)
+
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-navy-600">
+      <span className="text-xs text-gray-500 dark:text-gray-400">
+        {from}–{to} из {total}
+      </span>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onPageChange(page - 1)}
+          disabled={page <= 1}
+          className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-navy-600 text-gray-600 dark:text-gray-300 bg-white dark:bg-navy-800 hover:bg-gray-50 dark:hover:bg-navy-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          Назад
+        </button>
+        <span className="text-xs text-gray-500 dark:text-gray-400 px-2">
+          {page} / {totalPages}
+        </span>
+        <button
+          type="button"
+          onClick={() => onPageChange(page + 1)}
+          disabled={page * perPage >= total}
+          className="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 dark:border-navy-600 text-gray-600 dark:text-gray-300 bg-white dark:bg-navy-800 hover:bg-gray-50 dark:hover:bg-navy-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          Вперёд
+        </button>
+      </div>
+    </div>
+  )
+}

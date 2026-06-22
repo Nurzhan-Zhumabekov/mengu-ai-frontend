@@ -116,7 +116,7 @@ export function DashboardPage() {
           <kbd className="ml-auto text-xs text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-navy-700 border border-gray-200 dark:border-navy-600 rounded px-2 py-0.5">↗</kbd>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 mb-5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
           <div className="metric-card">
             <div className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">New Events</div>
             <div className="text-2xl font-medium text-gray-900 dark:text-gray-100">{events.length}</div>
@@ -136,11 +136,11 @@ export function DashboardPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 mb-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
           <Card
             title="Inbox AI"
             action={
-              <button onClick={() => navigate('/inbox')} className="flex items-center gap-1 text-xs text-magenta-500 hover:text-magenta-600">
+              <button type="button" onClick={() => navigate('/inbox')} className="flex items-center gap-1 text-xs text-magenta-500 hover:text-magenta-600">
                 View all <ArrowRight size={12} />
               </button>
             }
@@ -162,7 +162,7 @@ export function DashboardPage() {
             {priorities.length === 0 ? (
               <div className="text-center py-6 text-sm text-gray-400 dark:text-gray-500">No priority tasks</div>
             ) : (
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {priorities.map((p, i) => (
                   <PriorityItem
                     key={p.task.id}
@@ -187,7 +187,7 @@ export function DashboardPage() {
                 <Sparkles size={18} className="text-magenta-500" />
                 <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Ask Mengu</h3>
               </div>
-              <button onClick={() => setChatOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+              <button type="button" onClick={() => setChatOpen(false)} aria-label="Закрыть" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                 <X size={18} />
               </button>
             </div>

@@ -5,7 +5,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-
 import { CSS } from '@dnd-kit/utilities'
 import { Plus, Calendar, AlertCircle, User, X, GripVertical } from 'lucide-react'
 import { Topbar } from '@/components/layout/Sidebar'
-import { Spinner } from '@/components/ui'
+import { Spinner, Pagination } from '@/components/ui'
 import { toast } from '@/components/ui/toast'
 import { useAuthStore } from '@/store'
 import { tasksService } from '@/services'
@@ -31,6 +31,7 @@ interface NewTaskForm {
 export function TasksPage() {
   const [myTasks, setMyTasks] = useState(false)
   const [overdueOnly, setOverdueOnly] = useState(false)
+  const [page, setPage] = useState(1)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [showNewTask, setShowNewTask] = useState(false)
   const [form, setForm] = useState<NewTaskForm>({ title: '', description: '', due_date: '', assignee_id: '', priority: 'medium' })
@@ -43,8 +44,8 @@ export function TasksPage() {
   )
 
   const { data, isLoading } = useQuery({
-    queryKey: ['tasks'],
-    queryFn: () => tasksService.getAll(),
+    queryKey: ['tasks', page],
+    queryFn: () => tasksService.getAll({ page }),
     refetchInterval: LIVE_POLL_INTERVAL_MS,
   })
 
@@ -105,7 +106,7 @@ export function TasksPage() {
       <Topbar
         title="Tasks"
         actions={
-          <button onClick={() => { setForm({ title: '', description: '', due_date: '', assignee_id: '', priority: 'medium' }); setShowNewTask(true) }} className="btn-primary">
+          <button type="button" onClick={() => { setForm({ title: '', description: '', due_date: '', assignee_id: '', priority: 'medium' }); setShowNewTask(true) }} className="btn-primary">
             <Plus size={14} /> New Task
           </button>
         }
@@ -113,7 +114,8 @@ export function TasksPage() {
 
       <div className="flex items-center gap-2 px-6 py-3 bg-white dark:bg-navy-800 border-b border-gray-100 dark:border-navy-600">
         <button
-          onClick={() => { setMyTasks(false); setOverdueOnly(false) }}
+          type="button"
+          onClick={() => { setMyTasks(false); setOverdueOnly(false); setPage(1) }}
           className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
             !myTasks && !overdueOnly
               ? 'bg-magenta-500 text-white'
@@ -123,7 +125,8 @@ export function TasksPage() {
           All Tasks ({tasks.length})
         </button>
         <button
-          onClick={() => { setMyTasks(true); setOverdueOnly(false) }}
+          type="button"
+          onClick={() => { setMyTasks(true); setOverdueOnly(false); setPage(1) }}
           className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
             myTasks
               ? 'bg-magenta-500 text-white'
@@ -133,7 +136,8 @@ export function TasksPage() {
           My Tasks
         </button>
         <button
-          onClick={() => { setOverdueOnly(true); setMyTasks(false) }}
+          type="button"
+          onClick={() => { setOverdueOnly(true); setMyTasks(false); setPage(1) }}
           className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
             overdueOnly
               ? 'bg-red-500 text-white'
@@ -149,7 +153,7 @@ export function TasksPage() {
           <div className="flex justify-center pt-16"><Spinner /></div>
         ) : (
           <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-            <div className="grid grid-cols-4 gap-3 h-full">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 h-full">
               {COLUMNS.map(({ status, label, color }) => {
                 const colTasks = tasksByStatus(status)
                 return (
@@ -201,6 +205,14 @@ export function TasksPage() {
             </DragOverlay>
           </DndContext>
         )}
+        {data && data.total > 0 && (
+          <Pagination
+            page={page}
+            perPage={data.per_page}
+            total={data.total}
+            onPageChange={setPage}
+          />
+        )}
       </div>
 
       {selectedTask && (
@@ -220,7 +232,7 @@ export function TasksPage() {
           <div className="relative bg-white dark:bg-navy-800 rounded-xl shadow-xl w-full max-w-md mx-4 p-6 z-50">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-base font-medium text-gray-900 dark:text-gray-100">New Task</h3>
-              <button onClick={() => setShowNewTask(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+              <button type="button" onClick={() => setShowNewTask(false)} aria-label="Закрыть" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                 <X size={18} />
               </button>
             </div>
@@ -336,7 +348,7 @@ function SortableTaskCard({ task, onClick, selected }: TaskCardProps) {
       } ${overdue ? 'border-l-4 border-l-red-400' : dueSoon ? 'border-l-4 border-l-amber-400' : ''}`}
     >
       <div className="flex items-start gap-1">
-        <button {...attributes} {...listeners} className="mt-0.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 cursor-grab active:cursor-grabbing flex-shrink-0">
+        <button type="button" {...attributes} {...listeners} className="mt-0.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 cursor-grab active:cursor-grabbing flex-shrink-0">
           <GripVertical size={14} />
         </button>
         <div className="flex-1 min-w-0" onClick={onClick}>
@@ -388,7 +400,7 @@ function TaskDrawer({ task, onClose, onUpdate }: TaskDrawerProps) {
       <div className="relative w-[380px] bg-white dark:bg-navy-800 border-l border-gray-200 dark:border-navy-600 h-full overflow-y-auto shadow-xl z-50">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-navy-600">
           <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Task Details</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg leading-none">×</button>
+          <button type="button" onClick={onClose} aria-label="Закрыть" className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg leading-none">×</button>
         </div>
 
         <div className="p-5 space-y-4">
@@ -422,6 +434,7 @@ function TaskDrawer({ task, onClose, onUpdate }: TaskDrawerProps) {
             {COLUMNS.map(({ status, label }) =>
               status !== task.status ? (
                 <button
+                  type="button"
                   key={status}
                   onClick={() => onUpdate({ status })}
                   className="w-full text-left text-sm px-3 py-2 rounded-lg border border-gray-200 dark:border-navy-600 hover:border-magenta-300 hover:bg-pink-50 dark:hover:bg-pink-500/10 transition-colors text-gray-700 dark:text-gray-300"

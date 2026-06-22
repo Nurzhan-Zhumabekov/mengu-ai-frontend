@@ -34,8 +34,4 @@ export const authService = {
     return data
   },
 
-  async loginWithMicrosoftCode(code: string): Promise<AuthTokens> {
-    const { data } = await httpClient.post<AuthTokens>('/auth/oauth/microsoft', { code })
-    return data
-  },
 }

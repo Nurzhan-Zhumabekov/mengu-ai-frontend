@@ -30,6 +30,7 @@ export function SettingsPage() {
         <div className="w-52 min-w-52 border-r border-gray-100 dark:border-navy-600 py-4 bg-white dark:bg-navy-800 overflow-y-auto">
           {TABS.map(({ id, label, icon: Icon }) => (
             <button
+              type="button"
               key={id}
               onClick={() => setActiveTab(id)}
               className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-left transition-colors ${
@@ -77,23 +78,25 @@ function ProfileTab({ user }: { user: DecodedUser | null }) {
 
   const updateOrgMutation = useMutation({
     mutationFn: (name: string) => organizationService.update({ name }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organization'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organization'] })
+      toast('Settings saved', 'success')
+    },
+    onError: () => {
+      toast('Не удалось сохранить настройки организации.', 'error')
+    },
+    onSettled: () => {
+      setSaving(false)
+    },
   })
 
-  async function handleSave(e: React.FormEvent) {
+  function handleSave(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    try {
-      if (org && orgName.trim() && orgName !== org.name) {
-        await updateOrgMutation.mutateAsync(orgName.trim())
-      }
-      // language/replyStyle are stored purely client-side (see store/index.ts
-      // useLocalSettingsStore) — the backend has no Organization.settings
-      // field to persist these to.
+    if (org && orgName.trim() && orgName !== org.name) {
+      updateOrgMutation.mutate(orgName.trim())
+    } else {
       toast('Settings saved', 'success')
-    } catch {
-      toast('Could not save organization name. Please try again.', 'error')
-    } finally {
       setSaving(false)
     }
   }
@@ -164,6 +167,7 @@ function ProfileTab({ user }: { user: DecodedUser | null }) {
         <div className="flex gap-2">
           {THEME_OPTIONS.map((opt) => (
             <button
+              type="button"
               key={opt.value}
               onClick={() => setPreference(opt.value)}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border text-xs font-medium transition-colors ${
@@ -240,6 +244,7 @@ function IntegrationsTab() {
                   <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" /> Connected
                 </span>
                 <button
+                  type="button"
                   onClick={() => disconnectMutation.mutate(intg.provider)}
                   disabled={disconnectMutation.isPending}
                   className="text-xs text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
@@ -248,7 +253,7 @@ function IntegrationsTab() {
                 </button>
               </div>
             ) : (
-              <button onClick={() => handleConnect(intg.provider)} className="btn-primary text-xs py-1.5 px-3">
+              <button type="button" onClick={() => handleConnect(intg.provider)} className="btn-primary text-xs py-1.5 px-3">
                 Connect
               </button>
             )}
