@@ -25,18 +25,18 @@ export function formatDateTime(date: string): string {
   return format(new Date(date), 'd MMM yyyy HH:mm', { locale: enUS })
 }
 
-export function isDueSoon(date?: string): boolean {
+export function isDueSoon(date?: string | null): boolean {
   if (!date) return false
   const d = new Date(date)
   return !isPast(d) && d.getTime() - Date.now() < 1000 * 60 * 60 * 24
 }
 
-export function isOverdue(date?: string): boolean {
+export function isOverdue(date?: string | null): boolean {
   if (!date) return false
   return isPast(new Date(date))
 }
 
-export function formatDue(date?: string): string {
+export function formatDue(date?: string | null): string {
   if (!date) return '—'
   if (isToday(new Date(date))) return `Today ${formatTime(date)}`
   if (isOverdue(date)) return `Overdue ${timeAgo(date)}`
@@ -112,3 +112,13 @@ export function formatFileSize(bytes: number): string {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
+
+/**
+ * The backend has no WebSocket/push support (confirmed: no /ws route exists
+ * in internal/router/router.go, no websocket dependency in go.mod) — so
+ * "live" updates are done via polling instead. Used as `refetchInterval`
+ * on queries for data that can change from background processes the user
+ * didn't trigger themselves (e.g. the AI worker completing an analysis,
+ * or another teammate updating a task).
+ */
+export const LIVE_POLL_INTERVAL_MS = 30_000

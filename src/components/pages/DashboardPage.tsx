@@ -1,29 +1,29 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Sparkles, TrendingUp, Users, FileX, AlertCircle, ArrowRight, X } from 'lucide-react'
+import { Sparkles, Clock3, Users, FileX, AlertCircle, ArrowRight, X, Inbox, Lightbulb } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Topbar } from '@/components/layout/Sidebar'
-import { Card, Spinner } from '@/components/ui'
-import { analyticsService, eventsService, insightsService, tasksService } from '@/services/api'
-import { timeAgo, eventStatusClass, formatDue, isOverdue } from '@/utils/helpers'
-import type { AIInsight, IncomingEvent, Task } from '@/types'
+import { Card, Spinner, EmptyState } from '@/components/ui'
+import { analyticsService, eventsService, insightsService, tasksService } from '@/services'
+import { timeAgo, eventStatusClass, formatDue, isOverdue, LIVE_POLL_INTERVAL_MS } from '@/utils/helpers'
+import type { Insight, IncomingEvent, Task } from '@/types'
 
 const INSIGHT_ICONS: Record<string, { icon: React.ReactNode; colorClass: string }> = {
-  contract_signing_ignore: {
+  overdue_task: {
+    icon: <Clock3 size={15} />,
+    colorClass: 'bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300',
+  },
+  draft_pending_too_long: {
     icon: <FileX size={15} />,
-    colorClass: 'bg-pink-50 text-pink-700',
+    colorClass: 'bg-pink-50 text-pink-700 dark:bg-pink-500/10 dark:text-pink-300',
   },
-  team_workload_imbalance: {
+  unassigned_task: {
     icon: <Users size={15} />,
-    colorClass: 'bg-amber-50 text-amber-700',
+    colorClass: 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300',
   },
-  revenue_opportunity: {
-    icon: <TrendingUp size={15} />,
-    colorClass: 'bg-blue-50 text-blue-700',
-  },
-  sla_violation: {
+  action_failure_spike: {
     icon: <AlertCircle size={15} />,
-    colorClass: 'bg-amber-50 text-amber-700',
+    colorClass: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-300',
   },
 }
 
@@ -34,21 +34,25 @@ export function DashboardPage() {
   const { data: analytics, isLoading: loadingAnalytics } = useQuery({
     queryKey: ['analytics'],
     queryFn: analyticsService.getSummary,
+    refetchInterval: LIVE_POLL_INTERVAL_MS,
   })
 
   const { data: eventsData, isLoading: loadingEvents } = useQuery({
     queryKey: ['events', 'dashboard'],
     queryFn: () => eventsService.getAll({ status: 'new' }),
+    refetchInterval: LIVE_POLL_INTERVAL_MS,
   })
 
   const { data: insights, isLoading: loadingInsights } = useQuery({
     queryKey: ['insights'],
     queryFn: insightsService.getAll,
+    refetchInterval: LIVE_POLL_INTERVAL_MS,
   })
 
   const { data: tasksData } = useQuery({
     queryKey: ['tasks'],
     queryFn: () => tasksService.getAll(),
+    refetchInterval: LIVE_POLL_INTERVAL_MS,
   })
 
   const events = eventsData?.data.slice(0, 4) ?? []
@@ -64,13 +68,13 @@ export function DashboardPage() {
         {/* Ask Mengu bar */}
         <div
           onClick={() => setChatOpen(true)}
-          className="flex items-center gap-3 bg-white border border-magenta-300 rounded-xl px-4 py-3 mb-5 cursor-pointer hover:border-magenta-400 transition-colors"
+          className="flex items-center gap-3 bg-white dark:bg-navy-800 border border-magenta-300 dark:border-magenta-500/40 rounded-xl px-4 py-3 mb-5 cursor-pointer hover:border-magenta-400 transition-colors"
         >
           <Sparkles size={18} className="text-magenta-500 flex-shrink-0" />
-          <span className="text-sm text-gray-400">
+          <span className="text-sm text-gray-400 dark:text-gray-500">
             Ask Mengu anything... e.g. &ldquo;What&rsquo;s most important today?&rdquo;
           </span>
-          <kbd className="ml-auto text-xs text-gray-400 bg-gray-50 border border-gray-200 rounded px-2 py-0.5">
+          <kbd className="ml-auto text-xs text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-navy-700 border border-gray-200 dark:border-navy-600 rounded px-2 py-0.5">
             ↗
           </kbd>
         </div>
@@ -81,25 +85,25 @@ export function DashboardPage() {
         ) : (
           <div className="grid grid-cols-3 gap-3 mb-5">
             <div className="metric-card">
-              <div className="text-xs text-gray-500 mb-1.5">Incoming Today</div>
-              <div className="text-2xl font-medium text-gray-900">{analytics?.events_today}</div>
-              <div className="text-xs text-emerald-600 mt-1">
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">Incoming Today</div>
+              <div className="text-2xl font-medium text-gray-900 dark:text-gray-100">{analytics?.events_today}</div>
+              <div className="text-xs text-emerald-600 dark:text-emerald-400 mt-1">
                 ↑ {analytics?.events_auto_processed} auto-processed
               </div>
             </div>
             <div className="metric-card">
-              <div className="text-xs text-gray-500 mb-1.5">Active Tasks</div>
-              <div className="text-2xl font-medium text-gray-900">{analytics?.active_tasks}</div>
-              <div className="text-xs text-red-500 mt-1">
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">Active Tasks</div>
+              <div className="text-2xl font-medium text-gray-900 dark:text-gray-100">{analytics?.active_tasks}</div>
+              <div className="text-xs text-red-500 dark:text-red-400 mt-1">
                 {analytics?.overdue_tasks} overdue
               </div>
             </div>
             <div className="metric-card">
-              <div className="text-xs text-gray-500 mb-1.5">Avg Response Time</div>
-              <div className="text-2xl font-medium text-gray-900">
-                {analytics?.avg_response_time_minutes} min
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">Documents with Risks</div>
+              <div className="text-2xl font-medium text-gray-900 dark:text-gray-100">
+                {analytics?.open_documents}
               </div>
-              <div className="text-xs text-emerald-600 mt-1">↓ was 28 min manually</div>
+              <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">flagged by AI analysis</div>
             </div>
           </div>
         )}
@@ -119,8 +123,10 @@ export function DashboardPage() {
           >
             {loadingEvents ? (
               <div className="flex justify-center py-4"><Spinner /></div>
+            ) : events.length === 0 ? (
+              <EmptyState icon={<Inbox size={24} />} title="No new events" />
             ) : (
-              <div className="divide-y divide-gray-50">
+              <div className="divide-y divide-gray-50 dark:divide-navy-700">
                 {events.map((event) => (
                   <EventRow key={event.id} event={event} />
                 ))}
@@ -142,10 +148,12 @@ export function DashboardPage() {
           >
             {loadingInsights ? (
               <div className="flex justify-center py-4"><Spinner /></div>
+            ) : !insights || insights.length === 0 ? (
+              <EmptyState icon={<Lightbulb size={24} />} title="No insights yet" />
             ) : (
-              <div className="divide-y divide-gray-50">
-                {insights?.slice(0, 4).map((insight) => (
-                  <InsightRow key={insight.id} insight={insight} />
+              <div className="divide-y divide-gray-50 dark:divide-navy-700">
+                {insights.slice(0, 4).map((insight) => (
+                  <InsightRow key={insight.key} insight={insight} />
                 ))}
               </div>
             )}
@@ -155,14 +163,14 @@ export function DashboardPage() {
         {/* Top 3 priorities */}
         <Card title="Top 3 Priorities Today">
           {priorities.length === 0 ? (
-            <div className="text-center py-6 text-sm text-gray-400">No priority tasks</div>
+            <div className="text-center py-6 text-sm text-gray-400 dark:text-gray-500">No priority tasks</div>
           ) : (
             <div className="grid grid-cols-3 gap-3">
               {priorities.map((p, i) => (
                 <PriorityItem
                   key={p.task.id}
                   label={i === 0 ? 'URGENT' : i === 1 ? 'IMPORTANT' : 'SCHEDULED'}
-                  labelClass={i === 0 ? 'text-magenta-600' : i === 1 ? 'text-amber-600' : 'text-blue-600'}
+                  labelClass={i === 0 ? 'text-magenta-600 dark:text-magenta-400' : i === 1 ? 'text-amber-600 dark:text-amber-400' : 'text-blue-600 dark:text-blue-400'}
                   title={p.task.title}
                   meta={p.meta}
                 />
@@ -176,21 +184,21 @@ export function DashboardPage() {
       {chatOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
           <div className="absolute inset-0 bg-black/20" onClick={() => setChatOpen(false)} />
-          <div className="relative w-[400px] bg-white border-l border-gray-200 h-full shadow-xl z-50 flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div className="relative w-[400px] bg-white dark:bg-navy-800 border-l border-gray-200 dark:border-navy-600 h-full shadow-xl z-50 flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-navy-600">
               <div className="flex items-center gap-2">
                 <Sparkles size={18} className="text-magenta-500" />
-                <h3 className="text-sm font-medium text-gray-900">Ask Mengu</h3>
+                <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Ask Mengu</h3>
               </div>
-              <button onClick={() => setChatOpen(false)} className="text-gray-400 hover:text-gray-600">
+              <button onClick={() => setChatOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                 <X size={18} />
               </button>
             </div>
             <div className="flex-1 flex items-center justify-center p-6">
               <div className="text-center">
                 <Sparkles size={40} className="text-magenta-300 mx-auto mb-4" />
-                <p className="text-sm text-gray-500">Coming soon</p>
-                <p className="text-xs text-gray-400 mt-1">AI chat assistant is being built</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Coming soon</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">AI chat assistant is being built</p>
               </div>
             </div>
           </div>
@@ -220,17 +228,17 @@ const EVENT_STATUS_LABELS: Record<string, string> = {
 
 function EventRow({ event }: { event: IncomingEvent }) {
   return (
-    <div className="flex items-start gap-2.5 py-2.5 cursor-pointer hover:bg-gray-50 -mx-4 px-4 rounded-lg transition-colors">
+    <div className="flex items-start gap-2.5 py-2.5 cursor-pointer hover:bg-gray-50 dark:hover:bg-navy-700 -mx-4 px-4 rounded-lg transition-colors">
       <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-medium text-gray-900 truncate">
+        <div className="text-[13px] font-medium text-gray-900 dark:text-gray-100 truncate">
           {event.metadata.sender?.split('@')[0]}
         </div>
-        <div className="text-xs text-gray-500 truncate">
+        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
           {event.metadata.subject}
         </div>
       </div>
       <div className="flex flex-col items-end gap-1 flex-shrink-0">
-        <span className="text-[11px] text-gray-400">{timeAgo(event.created_at)}</span>
+        <span className="text-[11px] text-gray-400 dark:text-gray-500">{timeAgo(event.created_at)}</span>
         <span className={eventStatusClass(event.status)}>
           {EVENT_STATUS_LABELS[event.status] ?? event.status}
         </span>
@@ -239,14 +247,14 @@ function EventRow({ event }: { event: IncomingEvent }) {
   )
 }
 
-function InsightRow({ insight }: { insight: AIInsight }) {
-  const config = INSIGHT_ICONS[insight.type] ?? { icon: <AlertCircle size={15} />, colorClass: 'bg-gray-100 text-gray-500' }
+function InsightRow({ insight }: { insight: Insight }) {
+  const config = INSIGHT_ICONS[insight.type] ?? { icon: <AlertCircle size={15} />, colorClass: 'bg-gray-100 text-gray-500 dark:bg-navy-600 dark:text-gray-400' }
   return (
     <div className="flex items-start gap-2.5 py-2.5">
       <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${config.colorClass}`}>
         {config.icon}
       </div>
-      <div className="text-xs text-gray-700 leading-relaxed">
+      <div className="text-xs text-gray-700 dark:text-gray-300 leading-relaxed">
         <span className="font-medium">{insight.title}</span> — {insight.description}
       </div>
     </div>
@@ -257,10 +265,10 @@ function PriorityItem({
   label, labelClass, title, meta,
 }: { label: string; labelClass: string; title: string; meta: string }) {
   return (
-    <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+    <div className="bg-gray-50 dark:bg-navy-700 rounded-lg p-3 border border-gray-100 dark:border-navy-600">
       <div className={`text-[10px] font-medium mb-1.5 ${labelClass}`}>{label}</div>
-      <div className="text-[13px] font-medium text-gray-900 leading-snug mb-1.5">{title}</div>
-      <div className="text-[11px] text-gray-500">{meta}</div>
+      <div className="text-[13px] font-medium text-gray-900 dark:text-gray-100 leading-snug mb-1.5">{title}</div>
+      <div className="text-[11px] text-gray-500 dark:text-gray-400">{meta}</div>
     </div>
   )
 }

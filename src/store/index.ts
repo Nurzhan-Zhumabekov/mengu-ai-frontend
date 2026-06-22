@@ -1,46 +1,49 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { User, AuthResponse, Notification } from '@/types'
+import type { DecodedUser, LocalSettings } from '@/types'
+import { decodeJWT } from '@/utils/jwt'
 
 // ─── Auth Store ───────────────────────────────────────────────────────────────
+//
+// The real backend never returns a `user` object (see services/authService.ts
+// comments) — only a JWT token pair. `user` here is decoded client-side from
+// the access_token payload (id, org_id, role only — no name/email available).
 
 interface AuthStore {
-  user: User | null
-  token: string | null
+  user: DecodedUser | null
+  accessToken: string | null
   refreshToken: string | null
   isAuthenticated: boolean
-  login: (res: AuthResponse) => void
+  /** Call with the raw token pair from login/register/refresh/oauth responses. */
+  setTokens: (accessToken: string, refreshToken: string) => void
   logout: () => void
-  updateUser: (patch: Partial<User>) => void
 }
 
 export const useAuthStore = create<AuthStore>()(
   persist(
     (set) => ({
       user: null,
-      token: null,
+      accessToken: null,
       refreshToken: null,
       isAuthenticated: false,
-      login: (res) => {
-        localStorage.setItem('mengu_token', res.access_token)
+      setTokens: (accessToken, refreshToken) => {
+        const decoded = decodeJWT(accessToken)
         set({
-          user: res.user,
-          token: res.access_token,
-          refreshToken: res.refresh_token,
-          isAuthenticated: true,
+          user: decoded,
+          accessToken,
+          refreshToken,
+          isAuthenticated: decoded !== null,
         })
       },
       logout: () => {
-        localStorage.removeItem('mengu_token')
-        set({ user: null, token: null, refreshToken: null, isAuthenticated: false })
+        set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false })
       },
-      updateUser: (patch) => set((s) => ({ user: s.user ? { ...s.user, ...patch } : null })),
     }),
     {
       name: 'mengu-auth',
       partialize: (s) => ({
         user: s.user,
-        token: s.token,
+        accessToken: s.accessToken,
         refreshToken: s.refreshToken,
         isAuthenticated: s.isAuthenticated,
       }),
@@ -52,69 +55,116 @@ export const useAuthStore = create<AuthStore>()(
 
 interface UIStore {
   sidebarCollapsed: boolean
-  sidebarMobileOpen: boolean
   toggleSidebar: () => void
-  setSidebarMobileOpen: (open: boolean) => void
-  darkMode: boolean
-  toggleDarkMode: () => void
   activeModal: string | null
   openModal: (id: string) => void
   closeModal: () => void
-  commandPaletteOpen: boolean
-  setCommandPaletteOpen: (open: boolean) => void
-  // Notifications
-  notifications: Notification[]
-  notificationsPanelOpen: boolean
-  setNotificationsPanelOpen: (open: boolean) => void
-  addNotification: (n: Notification) => void
-  markAsRead: (id: string) => void
-  markAllAsRead: () => void
-  unreadCount: () => number
 }
 
-export const useUIStore = create<UIStore>()(
+export const useUIStore = create<UIStore>((set) => ({
+  sidebarCollapsed: false,
+  toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+  activeModal: null,
+  openModal: (id) => set({ activeModal: id }),
+  closeModal: () => set({ activeModal: null }),
+}))
+
+// ─── Theme Store ──────────────────────────────────────────────────────────────
+//
+// `preference` is what the user picked (or 'system' if they never picked
+// anything). `resolvedTheme` is what's actually rendered — when preference
+// is 'system' this tracks the OS-level prefers-color-scheme and updates
+// live if the user changes their OS setting without touching the app.
+
+export type ThemePreference = 'light' | 'dark' | 'system'
+export type ResolvedTheme = 'light' | 'dark'
+
+function getSystemTheme(): ResolvedTheme {
+  if (typeof window === 'undefined') return 'light'
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+}
+
+function applyThemeClass(theme: ResolvedTheme) {
+  if (typeof document === 'undefined') return
+  document.documentElement.classList.toggle('dark', theme === 'dark')
+}
+
+interface ThemeStore {
+  preference: ThemePreference
+  resolvedTheme: ResolvedTheme
+  setPreference: (pref: ThemePreference) => void
+}
+
+export const useThemeStore = create<ThemeStore>()(
   persist(
-    (set, get) => ({
-      sidebarCollapsed: false,
-      sidebarMobileOpen: false,
-      toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
-      setSidebarMobileOpen: (open) => set({ sidebarMobileOpen: open }),
-      darkMode: false,
-      toggleDarkMode: () => {
-        const next = !get().darkMode
-        if (next) {
-          document.documentElement.classList.add('dark')
-        } else {
-          document.documentElement.classList.remove('dark')
-        }
-        set({ darkMode: next })
+    (set) => ({
+      preference: 'system',
+      resolvedTheme: getSystemTheme(),
+      setPreference: (pref) => {
+        const resolved = pref === 'system' ? getSystemTheme() : pref
+        applyThemeClass(resolved)
+        set({ preference: pref, resolvedTheme: resolved })
       },
-      activeModal: null,
-      openModal: (id) => set({ activeModal: id }),
-      closeModal: () => set({ activeModal: null }),
-      commandPaletteOpen: false,
-      setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
-      // Notifications
-      notifications: [],
-      notificationsPanelOpen: false,
-      setNotificationsPanelOpen: (open) => set({ notificationsPanelOpen: open }),
-      addNotification: (n) => set((s) => ({ notifications: [n, ...s.notifications].slice(0, 50) })),
-      markAsRead: (id) =>
-        set((s) => ({
-          notifications: s.notifications.map((n) => (n.id === id ? { ...n, read: true } : n)),
-        })),
-      markAllAsRead: () =>
-        set((s) => ({
-          notifications: s.notifications.map((n) => ({ ...n, read: true })),
-        })),
-      unreadCount: () => get().notifications.filter((n) => !n.read).length,
     }),
     {
-      name: 'mengu-ui',
-      partialize: (s) => ({
-        darkMode: s.darkMode,
-        sidebarCollapsed: s.sidebarCollapsed,
-      }),
+      name: 'mengu-theme',
+      // Only the user's choice is persisted — resolvedTheme is always
+      // recomputed on load so a stale system snapshot is never restored.
+      partialize: (s) => ({ preference: s.preference }),
+      onRehydrateStorage: () => (state) => {
+        if (!state) return
+        const resolved = state.preference === 'system' ? getSystemTheme() : state.preference
+        state.resolvedTheme = resolved
+        applyThemeClass(resolved)
+      },
     }
+  )
+)
+
+/**
+ * Call once at app startup (see main.tsx). Applies the initial theme class
+ * before React mounts (avoiding a flash of the wrong theme), and subscribes
+ * to OS theme changes so 'system' preference stays live.
+ */
+export function initTheme() {
+  const { preference } = useThemeStore.getState()
+  const resolved = preference === 'system' ? getSystemTheme() : preference
+  applyThemeClass(resolved)
+  useThemeStore.setState({ resolvedTheme: resolved })
+
+  const media = window.matchMedia('(prefers-color-scheme: dark)')
+  media.addEventListener('change', (e) => {
+    const { preference: currentPref } = useThemeStore.getState()
+    if (currentPref !== 'system') return
+    const next: ResolvedTheme = e.matches ? 'dark' : 'light'
+    applyThemeClass(next)
+    useThemeStore.setState({ resolvedTheme: next })
+  })
+}
+
+// ─── Local Settings Store ─────────────────────────────────────────────────────
+//
+// The real backend has no Organization.settings field (confirmed against
+// internal/model/organization.go and internal/organization/handler.go — only
+// id/name/slug/plan/created_at exist). Language and reply-style preferences
+// are therefore purely client-side, persisted to localStorage, and never
+// sent to the backend. If the backend adds support for these later, this
+// store's shape can be swapped for a real API-backed one without touching
+// the components that read from it (they only care about the hook contract).
+
+interface LocalSettingsStore extends LocalSettings {
+  setLanguage: (language: LocalSettings['language']) => void
+  setReplyStyle: (replyStyle: LocalSettings['replyStyle']) => void
+}
+
+export const useLocalSettingsStore = create<LocalSettingsStore>()(
+  persist(
+    (set) => ({
+      language: 'en',
+      replyStyle: 'formal',
+      setLanguage: (language) => set({ language }),
+      setReplyStyle: (replyStyle) => set({ replyStyle }),
+    }),
+    { name: 'mengu-local-settings' }
   )
 )

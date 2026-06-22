@@ -5,18 +5,16 @@ import { Topbar } from '@/components/layout/Sidebar'
 import { Spinner } from '@/components/ui'
 import { toast } from '@/components/ui/toast'
 import { useAuthStore } from '@/store'
-import { tasksService } from '@/services/api'
-import { formatDue, isOverdue, taskStatusLabel, isDueSoon } from '@/utils/helpers'
-import { useRole } from '@/hooks/useRole'
+import { tasksService } from '@/services'
+import type { CreateTaskPayload } from '@/services/tasksService'
+import { formatDue, isOverdue, taskStatusLabel, isDueSoon, LIVE_POLL_INTERVAL_MS } from '@/utils/helpers'
 import type { Task, TaskStatus } from '@/types'
 
 const COLUMNS: { status: TaskStatus; label: string; color: string }[] = [
-  { status: 'new',              label: 'New',               color: 'bg-gray-400' },
-  { status: 'in_progress',      label: 'In Progress',       color: 'bg-blue-400' },
-  { status: 'pending_approval', label: 'Pending Approval',  color: 'bg-amber-400' },
-  { status: 'blocked',          label: 'Blocked',           color: 'bg-red-500' },
-  { status: 'done',             label: 'Done',              color: 'bg-emerald-400' },
-  { status: 'cancelled',        label: 'Cancelled',         color: 'bg-gray-300' },
+  { status: 'new',         label: 'New',          color: 'bg-gray-400' },
+  { status: 'in_progress', label: 'In Progress',   color: 'bg-blue-400' },
+  { status: 'done',        label: 'Done',          color: 'bg-emerald-400' },
+  { status: 'cancelled',   label: 'Cancelled',      color: 'bg-red-400' },
 ]
 
 interface NewTaskForm {
@@ -32,34 +30,41 @@ export function TasksPage() {
   const [showNewTask, setShowNewTask] = useState(false)
   const [form, setForm] = useState<NewTaskForm>({ title: '', description: '', due_date: '' })
   const { user } = useAuthStore()
-  const { isViewer } = useRole()
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery({
-    queryKey: ['tasks', myTasks, overdueOnly],
-    queryFn: () => tasksService.getAll({
-      assignee_id: myTasks && user ? user.id : undefined,
-    }),
+    queryKey: ['tasks'],
+    queryFn: () => tasksService.getAll(),
+    refetchInterval: LIVE_POLL_INTERVAL_MS,
   })
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, patch }: { id: string; patch: Partial<Task> }) =>
+    mutationFn: ({ id, patch }: { id: string; patch: { status?: TaskStatus; assignee_id?: string } }) =>
       tasksService.update(id, patch),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks'] }),
   })
 
   const createMutation = useMutation({
-    mutationFn: (payload: Partial<Task>) => tasksService.create(payload),
+    mutationFn: (payload: CreateTaskPayload) => tasksService.create(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
       setShowNewTask(false)
       setForm({ title: '', description: '', due_date: '' })
       toast('Task created successfully', 'success')
     },
+    onError: () => {
+      toast('Could not create task. Please try again.', 'error')
+    },
   })
 
   const tasks = data?.data ?? []
-  const filtered = overdueOnly ? tasks.filter((t) => isOverdue(t.due_date)) : tasks
+  let filtered = tasks
+  if (myTasks && user) {
+    filtered = filtered.filter((t) => t.assignee_id === user.id)
+  }
+  if (overdueOnly) {
+    filtered = filtered.filter((t) => isOverdue(t.due_date))
+  }
 
   function tasksByStatus(status: TaskStatus) {
     return filtered.filter((t) => t.status === status)
@@ -70,22 +75,19 @@ export function TasksPage() {
       <Topbar
         title="Tasks"
         actions={
-          !isViewer && (
-            <button onClick={() => { setForm({ title: '', description: '', due_date: '' }); setShowNewTask(true) }} className="btn-primary">
-              <Plus size={14} /> New Task
-            </button>
-          )
+          <button onClick={() => { setForm({ title: '', description: '', due_date: '' }); setShowNewTask(true) }} className="btn-primary">
+            <Plus size={14} /> New Task
+          </button>
         }
       />
 
-      {/* Filter bar */}
-      <div className="flex items-center gap-2 px-6 py-3 bg-white border-b border-gray-100">
+      <div className="flex items-center gap-2 px-6 py-3 bg-white dark:bg-navy-800 border-b border-gray-100 dark:border-navy-600">
         <button
           onClick={() => { setMyTasks(false); setOverdueOnly(false) }}
           className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
             !myTasks && !overdueOnly
               ? 'bg-magenta-500 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              : 'bg-gray-100 dark:bg-navy-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-navy-600'
           }`}
         >
           All Tasks ({tasks.length})
@@ -95,7 +97,7 @@ export function TasksPage() {
           className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
             myTasks
               ? 'bg-magenta-500 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              : 'bg-gray-100 dark:bg-navy-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-navy-600'
           }`}
         >
           My Tasks
@@ -105,40 +107,39 @@ export function TasksPage() {
           className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
             overdueOnly
               ? 'bg-red-500 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              : 'bg-gray-100 dark:bg-navy-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-navy-600'
           }`}
         >
           Overdue ({tasks.filter((t) => isOverdue(t.due_date)).length})
         </button>
       </div>
 
-      {/* Kanban */}
       <div className="flex-1 overflow-hidden p-6">
         {isLoading ? (
           <div className="flex justify-center pt-16"><Spinner /></div>
         ) : (
-          <div className="flex gap-3 h-full overflow-x-auto pb-2">
+          <div className="grid grid-cols-4 gap-3 h-full">
             {COLUMNS.map(({ status, label, color }) => {
               const colTasks = tasksByStatus(status)
               return (
                 <div
                   key={status}
-                  className="flex flex-col bg-gray-50 rounded-xl border border-gray-200 overflow-hidden min-w-[280px] w-[280px]"
+                  className="flex flex-col bg-gray-50 dark:bg-navy-900 rounded-xl border border-gray-200 dark:border-navy-600 overflow-hidden"
                 >
-                  <div className="flex items-center justify-between px-3 py-2.5 bg-white border-b border-gray-100">
+                  <div className="flex items-center justify-between px-3 py-2.5 bg-white dark:bg-navy-800 border-b border-gray-100 dark:border-navy-600">
                     <div className="flex items-center gap-2">
                       <div className={`w-2 h-2 rounded-full ${color}`} />
-                      <span className="text-xs font-medium text-gray-600 uppercase tracking-wide">
+                      <span className="text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wide">
                         {label}
                       </span>
                     </div>
-                    <span className="text-xs text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
+                    <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-navy-700 px-1.5 py-0.5 rounded-full">
                       {colTasks.length}
                     </span>
                   </div>
                   <div className="flex-1 overflow-y-auto p-2 space-y-2">
                     {colTasks.length === 0 ? (
-                      <div className="text-center py-6 text-xs text-gray-400">No tasks</div>
+                      <div className="text-center py-6 text-xs text-gray-400 dark:text-gray-500">No tasks</div>
                     ) : (
                       colTasks.map((task) => (
                         <TaskCard
@@ -157,7 +158,6 @@ export function TasksPage() {
         )}
       </div>
 
-      {/* Task detail drawer */}
       {selectedTask && (
         <TaskDrawer
           task={selectedTask}
@@ -169,14 +169,13 @@ export function TasksPage() {
         />
       )}
 
-      {/* New Task Modal */}
       {showNewTask && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/20" onClick={() => setShowNewTask(false)} />
-          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6 z-50">
+          <div className="relative bg-white dark:bg-navy-800 rounded-xl shadow-xl w-full max-w-md mx-4 p-6 z-50">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="text-base font-medium text-gray-900">New Task</h3>
-              <button onClick={() => setShowNewTask(false)} className="text-gray-400 hover:text-gray-600">
+              <h3 className="text-base font-medium text-gray-900 dark:text-gray-100">New Task</h3>
+              <button onClick={() => setShowNewTask(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
                 <X size={18} />
               </button>
             </div>
@@ -187,13 +186,17 @@ export function TasksPage() {
                 createMutation.mutate({
                   title: form.title,
                   description: form.description || undefined,
-                  due_date: form.due_date || undefined,
+                  // <input type="date"> gives "YYYY-MM-DD" — the backend's
+                  // Create handler strictly requires time.RFC3339 (see
+                  // internal/tasks/handler.go), so we convert to midnight
+                  // UTC on that date rather than sending the bare date string.
+                  due_date: form.due_date ? `${form.due_date}T00:00:00Z` : undefined,
                 })
               }}
               className="space-y-4"
             >
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">Title *</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Title *</label>
                 <input
                   value={form.title}
                   onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
@@ -203,7 +206,7 @@ export function TasksPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">Description</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Description</label>
                 <textarea
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
@@ -213,7 +216,7 @@ export function TasksPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1.5">Due Date</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Due Date</label>
                 <input
                   type="date"
                   value={form.due_date}
@@ -246,8 +249,6 @@ export function TasksPage() {
   )
 }
 
-// ─── Task Card ────────────────────────────────────────────────────────────────
-
 interface TaskCardProps {
   task: Task
   onClick: () => void
@@ -265,36 +266,24 @@ function TaskCard({ task, onClick, selected }: TaskCardProps) {
         selected ? 'border-magenta-400 shadow-sm' : ''
       } ${overdue ? 'border-l-4 border-l-red-400' : dueSoon ? 'border-l-4 border-l-amber-400' : ''}`}
     >
-      <div className="flex justify-between items-start mb-2 gap-2">
-        <div className="text-[13px] font-medium text-gray-900 leading-snug">
-          {task.title}
-        </div>
-        {task.priority && (
-          <span className={`flex-shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-sm ${
-            task.priority === 'critical' ? 'bg-red-100 text-red-700' :
-            task.priority === 'high' ? 'bg-orange-100 text-orange-700' :
-            task.priority === 'medium' ? 'bg-blue-100 text-blue-700' :
-            'bg-gray-100 text-gray-600'
-          }`}>
-            {task.priority}
-          </span>
-        )}
+      <div className="text-[13px] font-medium text-gray-900 dark:text-gray-100 leading-snug mb-2">
+        {task.title}
       </div>
 
       {task.description && (
-        <div className="text-[11px] text-gray-500 leading-relaxed mb-2 line-clamp-2">
+        <div className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed mb-2 line-clamp-2">
           {task.description}
         </div>
       )}
 
       <div className="flex items-center justify-between mt-2">
-        <div className={`flex items-center gap-1 text-[11px] ${overdue ? 'text-red-500' : 'text-gray-400'}`}>
+        <div className={`flex items-center gap-1 text-[11px] ${overdue ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'}`}>
           {overdue && <AlertCircle size={11} />}
           <Calendar size={11} />
           {formatDue(task.due_date)}
         </div>
         {task.assignee_id && (
-          <div className="flex items-center gap-1 text-[11px] text-gray-400">
+          <div className="flex items-center gap-1 text-[11px] text-gray-400 dark:text-gray-500">
             <User size={11} />
             <span>Assigned</span>
           </div>
@@ -304,90 +293,64 @@ function TaskCard({ task, onClick, selected }: TaskCardProps) {
   )
 }
 
-// ─── Task Drawer ──────────────────────────────────────────────────────────────
-
 interface TaskDrawerProps {
   task: Task
   onClose: () => void
-  onUpdate: (patch: Partial<Task>) => void
+  onUpdate: (patch: { status?: TaskStatus; assignee_id?: string }) => void
 }
 
 function TaskDrawer({ task, onClose, onUpdate }: TaskDrawerProps) {
   const overdue = isOverdue(task.due_date) && task.status !== 'done' && task.status !== 'cancelled'
-  const { isViewer } = useRole()
-
-  function handleDelegate() {
-    toast('Task delegation is coming soon', 'info')
-  }
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       <div className="absolute inset-0 bg-black/20" onClick={onClose} />
-      <div className="relative w-[380px] bg-white border-l border-gray-200 h-full overflow-y-auto shadow-xl z-50">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <h3 className="text-sm font-medium text-gray-900">Task Details</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+      <div className="relative w-[380px] bg-white dark:bg-navy-800 border-l border-gray-200 dark:border-navy-600 h-full overflow-y-auto shadow-xl z-50">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-navy-600">
+          <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">Task Details</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-lg leading-none">×</button>
         </div>
 
         <div className="p-5 space-y-4">
-          <h2 className="text-base font-medium text-gray-900">{task.title}</h2>
+          <h2 className="text-base font-medium text-gray-900 dark:text-gray-100">{task.title}</h2>
 
           {task.description && (
-            <p className="text-sm text-gray-600 leading-relaxed">{task.description}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 leading-relaxed">{task.description}</p>
           )}
 
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-500">Status</span>
-              <span className="font-medium text-gray-800">{taskStatusLabel(task.status)}</span>
+              <span className="text-gray-500 dark:text-gray-400">Status</span>
+              <span className="font-medium text-gray-800 dark:text-gray-200">{taskStatusLabel(task.status)}</span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-500">Due Date</span>
-              <span className={`font-medium ${overdue ? 'text-red-500' : 'text-gray-800'}`}>
+              <span className="text-gray-500 dark:text-gray-400">Due Date</span>
+              <span className={`font-medium ${overdue ? 'text-red-500 dark:text-red-400' : 'text-gray-800 dark:text-gray-200'}`}>
                 {formatDue(task.due_date)}
               </span>
             </div>
-            {task.priority && (
-              <div className="flex justify-between items-center">
-                <span className="text-gray-500">Priority</span>
-                <span className="text-sm font-medium capitalize text-gray-800">{task.priority}</span>
-              </div>
-            )}
             {task.assignee_id && (
               <div className="flex justify-between items-center">
-                <span className="text-gray-500">Assignee</span>
-                <span className="text-sm text-gray-800">ID: {task.assignee_id}</span>
+                <span className="text-gray-500 dark:text-gray-400">Assignee</span>
+                <span className="text-sm text-gray-800 dark:text-gray-200">ID: {task.assignee_id}</span>
               </div>
             )}
           </div>
 
-          {!isViewer && (
-            <div className="pt-2 space-y-2">
-              <button
-                onClick={handleDelegate}
-                className="w-full text-center text-sm font-medium text-magenta-600 bg-pink-50 hover:bg-pink-100 py-2 rounded-lg transition-colors"
-              >
-                Delegate Task
-              </button>
-            </div>
-          )}
-
-          {!isViewer && (
-            <div className="pt-2 space-y-2">
-              <div className="text-xs text-gray-500 mb-2">Change Status</div>
-              {COLUMNS.map(({ status, label }) =>
-                status !== task.status ? (
-                  <button
-                    key={status}
-                    onClick={() => onUpdate({ status })}
-                    className="w-full text-left text-sm px-3 py-2 rounded-lg border border-gray-200 hover:border-magenta-300 hover:bg-pink-50 transition-colors"
-                  >
-                    → {label}
-                  </button>
-                ) : null
-              )}
-            </div>
-          )}
+          <div className="pt-2 space-y-2">
+            <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">Change Status</div>
+            {COLUMNS.map(({ status, label }) =>
+              status !== task.status ? (
+                <button
+                  key={status}
+                  onClick={() => onUpdate({ status })}
+                  className="w-full text-left text-sm px-3 py-2 rounded-lg border border-gray-200 dark:border-navy-600 hover:border-magenta-300 hover:bg-pink-50 dark:hover:bg-pink-500/10 transition-colors text-gray-700 dark:text-gray-300"
+                >
+                  → {label}
+                </button>
+              ) : null
+            )}
+          </div>
         </div>
       </div>
     </div>

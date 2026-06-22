@@ -1,75 +1,53 @@
 // ─── Auth ────────────────────────────────────────────────────────────────────
+//
+// IMPORTANT: the real backend's /auth/login, /auth/register, /auth/refresh,
+// and /auth/oauth/* endpoints return ONLY a token pair — never a `user`
+// object (verified against internal/auth/handler.go). There is no GET /me
+// endpoint either. The only user identity available client-side comes from
+// decoding the JWT payload (sub, org_id, role) — see utils/jwt.ts.
 
-export interface User {
-  id: string
-  org_id: string
-  email: string
-  // Backend returns "name", frontend UI uses "full_name" — both kept for compat
-  name?: string
-  full_name?: string
-  role: 'admin' | 'manager' | 'employee' | 'viewer'
-  department?: string
-  is_active?: boolean
-  avatar_url?: string
-  auth_provider?: string
-  preferences?: UserPreferences
-  created_at?: string
-}
-
-export interface UserPreferences {
-  notifications_email?: boolean
-  notifications_push?: boolean
-  notifications_slack?: boolean
-  language?: 'ru' | 'kk' | 'en'
-  reply_style?: 'formal' | 'neutral' | 'friendly'
-}
-
-export interface AuthResponse {
+export interface AuthTokens {
   access_token: string
   refresh_token: string
   token_type: string
   expires_in: number
-  user?: User
+}
+
+/** Decoded from the JWT payload — see internal/middleware/auth.go claims: sub, org_id, role. */
+export interface DecodedUser {
+  id: string       // claims.sub
+  org_id: string   // claims.org_id
+  role: 'admin' | 'employee'  // claims.role — backend only ever sets these two (see internal/auth/service.go)
 }
 
 export interface AuthState {
-  user: User | null
-  token: string | null
+  user: DecodedUser | null
+  accessToken: string | null
+  refreshToken: string | null
   isAuthenticated: boolean
 }
 
 // ─── Organization ─────────────────────────────────────────────────────────────
+//
+// Real shape per internal/model/organization.go — NO settings field exists
+// on the backend. Any language/timezone/reply-style preference is stored
+// client-side only (see store/index.ts useLocalSettingsStore).
 
 export interface Organization {
   id: string
   name: string
   slug: string
-  plan: 'starter' | 'professional' | 'enterprise' | 'free' | 'pro'
+  plan: 'free' | 'pro' | 'enterprise'
   created_at: string
-  updated_at?: string
-  settings?: OrgSettings
-  sla_policies?: SLAPolicy[]
-}
-
-export interface OrgSettings {
-  language: 'ru' | 'kk' | 'en'
-  timezone: string
-  reply_style: 'formal' | 'neutral' | 'friendly'
-}
-
-export interface SLAPolicy {
-  type: string
-  response_time_hours: number
-  resolution_time_hours: number
-  escalation_after_hours: number
 }
 
 // ─── Incoming Events ──────────────────────────────────────────────────────────
+//
+// source includes 'gmail' on the real backend (internal/model/events.go),
+// in addition to email/api/webhook.
 
-export type EventSource = 'email' | 'document' | 'webhook' | 'manual' | 'calendar' | 'api' | 'gmail'
-export type EventStatus = 'new' | 'processing' | 'actioned' | 'closed' | 'completed' | 'failed'
-export type EventPriority = 'critical' | 'high' | 'medium' | 'low'
-export type EventCategory = 'partnership' | 'investor_update' | 'contract' | 'product' | 'internal' | 'hr' | 'legal' | 'finance' | 'support' | 'other'
+export type EventSource = 'email' | 'api' | 'webhook' | 'gmail'
+export type EventStatus = 'new' | 'processing' | 'completed' | 'failed'
 export type ActionType = 'schedule_meeting' | 'create_task' | 'analyze_document' | 'send_email_draft'
 export type ActionStatus = 'success' | 'failed' | 'skipped'
 
@@ -83,18 +61,10 @@ export interface EventAttachment {
 export interface EventMetadata {
   sender?: string
   subject?: string
-  attachments?: EventAttachment[]
+  // The real backend can store this as `null` (confirmed in simulation-report.md
+  // when an email has no attachments) rather than an empty array or undefined.
+  attachments?: EventAttachment[] | null
   headers?: Record<string, string>
-  [key: string]: unknown
-}
-
-export interface ExtractedEntities {
-  names?: string[]
-  companies?: string[]
-  dates?: string[]
-  amounts?: string[]
-  urls?: string[]
-  [key: string]: unknown
 }
 
 export interface IncomingEvent {
@@ -103,21 +73,27 @@ export interface IncomingEvent {
   source: EventSource
   raw_content: string
   metadata: EventMetadata
-  intent?: string
-  entities?: ExtractedEntities
-  priority?: EventPriority
-  category?: EventCategory
   status: EventStatus
-  processed_at?: string
   created_at: string
 }
 
-export interface FullEvent extends IncomingEvent {
-  analysis?: AIAnalysis | null
+/**
+ * Shape of GET /api/v1/events/:id. NOTE: `analysis` and `action_logs` are
+ * OMITTED from the JSON entirely (not present as keys) when there's nothing
+ * to show yet — not set to null. Always use `event.analysis ?? null` /
+ * `event.action_logs ?? []` defensively, never assume the key exists.
+ */
+export interface FullEvent {
+  event: IncomingEvent
+  analysis?: AIAnalysis
   action_logs?: ActionLog[]
 }
 
 // ─── AI Analysis ──────────────────────────────────────────────────────────────
+//
+// `intent` is a free-form string generated by the LLM (see internal/ai/client.go
+// system prompt: "a short label describing the email's purpose") — never
+// treat it as a fixed enum in the UI; only `actions[].type` is constrained.
 
 export interface AIAction {
   type: ActionType
@@ -128,7 +104,7 @@ export interface AIAnalysis {
   id: string
   event_id: string
   org_id: string
-  version?: number
+  version: number
   intent: string
   confidence: number
   actions: AIAction[]
@@ -150,206 +126,108 @@ export interface ActionLog {
 }
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
+//
+// The `tasks.status` column has NO check constraint on the backend
+// (internal/db/migrations/000001_init.up.sql) — any string the client sends
+// via PATCH is stored verbatim. The SQL DEFAULT is 'new' (confirmed — the
+// swagger annotation saying "pending" is stale/inaccurate and doesn't match
+// the actual INSERT statement in internal/actions/handlers_task.go). We use
+// 'new' | 'in_progress' | 'done' | 'cancelled' consistently across the app.
 
-export type TaskStatus = 'new' | 'in_progress' | 'pending_approval' | 'blocked' | 'done' | 'cancelled'
-export type TaskPriority = 'critical' | 'high' | 'medium' | 'low'
+export type TaskStatus = 'new' | 'in_progress' | 'done' | 'cancelled'
 
 export interface Task {
   id: string
-  org_id: string
-  event_id: string
-  parent_task_id?: string | null
-  assignee_id?: string
-  created_by_id?: string | null
+  org_id?: string
+  /** Null for manually-created tasks (via POST /tasks) — only AI-created tasks have an originating event. */
+  event_id?: string | null
+  assignee_id?: string | null
   title: string
-  description?: string
+  description?: string | null
   status: TaskStatus
-  priority?: TaskPriority
-  due_date?: string
-  completed_at?: string
-  tags?: string[]
+  due_date?: string | null
+  /** Set when status transitions to done/cancelled (migration 000005). Used by analytics for on-time calculations. */
+  completed_at?: string | null
   created_at: string
 }
 
-// ─── Documents ────────────────────────────────────────────────────────────────
+// ─── Document Analysis ────────────────────────────────────────────────────────
+//
+// CRITICAL: the shape of `risks` is DIFFERENT depending on the endpoint.
+// - GET /events/:id/documents (list)  → risks is a NUMBER (count only).
+//   Verified in internal/documents/handler.go: `Risks int`.
+// - The full risk strings are NOT separately exposed by any endpoint — only
+//   the count. If risk detail is ever needed, it would have to come from
+//   `analysis.raw_response`, which is not guaranteed to contain it either.
 
-export type DocumentType = 'contract' | 'invoice' | 'application' | 'report' | 'protocol' | 'order' | 'other'
-export type ApprovalStatus = 'draft' | 'in_review' | 'approved' | 'rejected' | 'signed'
-
-export interface Document {
+export interface DocumentAnalysisListItem {
   id: string
-  org_id: string
-  event_id?: string
-  title: string
-  type: DocumentType
-  file_path?: string
   file_name: string
-  file_size_bytes?: number
-  mime_type?: string
-  extracted_text?: string
-  summary?: string
-  extracted_entities?: ExtractedEntities
-  risk_flags?: RiskFlag[]
-  approval_status: ApprovalStatus
-  version: number
-  approval_chain?: ApprovalStep[]
-  created_at: string
-  analyzed_at?: string
-}
-
-export interface RiskFlag {
-  type: string
-  description: string
-  severity: 'low' | 'medium' | 'high' | 'critical'
-}
-
-export interface ApprovalStep {
-  id: string
-  approver_id: string
-  approver_name?: string
-  status: 'pending' | 'approved' | 'rejected'
-  comment?: string
-  acted_at?: string
-}
-
-// Keep legacy alias for backward compat
-export interface DocumentAnalysis {
-  id: string
-  org_id: string
-  event_id: string
-  file_name: string
-  summary?: string
-  risks: string[]
+  summary?: string | null
+  risks: number
   analyzed_at: string
-}
-
-// ─── Workflow Execution ───────────────────────────────────────────────────────
-
-export type WorkflowStatus = 'running' | 'paused' | 'completed' | 'failed' | 'cancelled'
-
-export interface WorkflowStep {
-  step_number: number
-  action: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
-  result?: Record<string, unknown>
-  started_at?: string
-  completed_at?: string
-}
-
-export interface WorkflowExecution {
-  id: string
-  org_id: string
-  workflow_definition_id: string
-  trigger_event_id: string
-  status: WorkflowStatus
-  current_step: number
-  steps_log: WorkflowStep[]
-  started_at: string
-  completed_at?: string
-  error_message?: string
 }
 
 // ─── Drafts ───────────────────────────────────────────────────────────────────
 
 export type DraftStatus = 'pending_approval' | 'approved' | 'sent' | 'rejected'
 
-export interface Draft {
+export interface DraftListItem {
   id: string
-  org_id: string
   event_id: string
   recipient: string
   subject: string
-  body: string
   status: DraftStatus
   created_at: string
 }
 
-// ─── Calendar Events ──────────────────────────────────────────────────────────
+/** Full draft shape returned by GET /drafts/:id — includes `body`, list items don't. */
+export interface Draft extends DraftListItem {
+  org_id: string
+  body: string
+}
 
-export interface CalendarEvent {
-  event_id: string
+export interface DraftApproveResponse {
+  id: string
+  status: DraftStatus
+  send_status?: 'success' | 'failed'
+  send_error?: string
+}
+
+// ─── Calendar Events ──────────────────────────────────────────────────────────
+//
+// Synthesized server-side from action_logs where action_type='schedule_meeting'
+// — there's no calendar_events table. No `event_id` field is actually present
+// on each item (see internal/email/analysis_handler.go GetCalendarEvents).
+
+export interface CalendarEventItem {
   title: string
   datetime: string
-  end_datetime?: string
   google_event_id?: string
   status: 'created' | 'failed'
-  attendees?: string[]
-  location?: string
-  meeting_url?: string
   created_at: string
 }
 
-// ─── Insights ─────────────────────────────────────────────────────────────────
+// ─── Integrations ──────────────────────────────────────────────────────────────
 
-export type InsightType =
-  | 'contract_signing_ignore'
-  | 'team_workload_imbalance'
-  | 'revenue_opportunity'
-  | 'sla_violation'
-  | 'overdue_task'
+export type IntegrationProvider = 'gmail' | 'calendar'
 
-export interface AIInsight {
-  id: string
-  org_id: string
-  type: InsightType
-  title: string
-  description: string
-  severity: 'info' | 'warning' | 'critical'
-  related_entity_id?: string
-  related_entity_type?: 'task' | 'document' | 'event'
-  is_resolved: boolean
-  created_at: string
-}
-
-// ─── Notifications ────────────────────────────────────────────────────────────
-
-export interface Notification {
-  id: string
-  type: 'task_assigned' | 'task_overdue' | 'document_approved' | 'insight_new' | 'event_processed' | 'sla_breach' | 'system'
-  title: string
-  message: string
-  read: boolean
-  related_id?: string
-  related_type?: 'task' | 'document' | 'event' | 'insight'
-  created_at: string
-}
-
-// ─── Audit Log ────────────────────────────────────────────────────────────────
-
-export interface AuditEntry {
-  id: string
-  org_id: string
-  user_id?: string
-  user_name?: string
-  action: string
-  entity_type: string
-  entity_id: string
-  details?: Record<string, unknown>
-  ip_address?: string
-  created_at: string
-}
-
-// ─── Analytics ────────────────────────────────────────────────────────────────
-
-export interface AnalyticsSummary {
-  events_today: number
-  events_auto_processed: number
-  active_tasks: number
-  overdue_tasks: number
-  avg_response_time_minutes: number
-  tasks_on_time_pct: number
-  ai_accuracy_pct: number
-  open_documents: number
+export interface IntegrationStatus {
+  provider: IntegrationProvider
+  connected: boolean
+  scope?: string
 }
 
 // ─── API Responses ────────────────────────────────────────────────────────────
+//
+// NOTE: the real backend never returns `has_more` — only data/total/page/per_page.
+// Compute "has more" on the client as `page * per_page < total` where needed.
 
 export interface PaginatedResponse<T> {
   data: T[]
   total: number
   page: number
   per_page: number
-  has_more: boolean
 }
 
 export interface ApiError {
@@ -361,16 +239,12 @@ export interface ApiError {
 
 export interface EventFilters {
   status?: EventStatus | 'all'
-  priority?: EventPriority | 'all'
-  category?: EventCategory | 'all'
   page?: number
   per_page?: number
 }
 
 export interface TaskFilters {
   status?: TaskStatus | 'all'
-  priority?: TaskPriority | 'all'
-  assignee_id?: string
   page?: number
   per_page?: number
 }
@@ -381,9 +255,52 @@ export interface DraftFilters {
   per_page?: number
 }
 
-export interface DocumentFilters {
-  type?: DocumentType | 'all'
-  approval_status?: ApprovalStatus | 'all'
-  page?: number
-  per_page?: number
+// ─── Local-only Settings (never sent to backend) ─────────────────────────────
+//
+// The backend has no concept of these — purely a client preference persisted
+// to localStorage via store/index.ts useLocalSettingsStore.
+
+export interface LocalSettings {
+  language: 'en' | 'ru' | 'kk'
+  replyStyle: 'formal' | 'neutral' | 'friendly'
+}
+
+// ─── Insights ─────────────────────────────────────────────────────────────────
+//
+// GET /insights computes these on-demand from real data using deterministic
+// rules (internal/insights/rules.go) — no LLM call, no insights table. `key`
+// is required to call PATCH /insights/resolve since insights have no other
+// stable identifier.
+
+export type InsightType = 'overdue_task' | 'draft_pending_too_long' | 'unassigned_task' | 'action_failure_spike'
+export type InsightSeverity = 'critical' | 'warning' | 'info'
+
+export interface Insight {
+  key: string
+  type: InsightType
+  severity: InsightSeverity
+  title: string
+  description: string
+  created_at: string
+  is_resolved: boolean
+}
+
+// ─── Analytics ────────────────────────────────────────────────────────────────
+//
+// GET /analytics/summary — every field is computed from real tables (see
+// internal/analytics/repository.go). ai_accuracy_pct is explicitly an
+// approximation (average LLM confidence, not verified accuracy); the
+// has_on_time_data flag tells you whether tasks_on_time_pct has any
+// real samples behind it yet.
+
+export interface AnalyticsSummary {
+  events_today: number
+  events_auto_processed: number
+  active_tasks: number
+  overdue_tasks: number
+  open_documents: number
+  tasks_on_time_pct: number
+  has_on_time_data: boolean
+  ai_accuracy_pct: number
+  ai_accuracy_is_approximation: boolean
 }

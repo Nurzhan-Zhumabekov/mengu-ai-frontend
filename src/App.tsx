@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AppLayout }       from '@/components/layout/AppLayout'
 import { ProtectedRoute }  from '@/components/layout/ProtectedRoute'
 import { LoginPage }       from '@/components/pages/LoginPage'
+import { RegisterPage }    from '@/components/pages/RegisterPage'
 import { DashboardPage }   from '@/components/pages/DashboardPage'
 import { InboxPage }       from '@/components/pages/InboxPage'
 import { TasksPage }       from '@/components/pages/TasksPage'
@@ -31,6 +32,7 @@ export default function App() {
         <Routes>
           {/* Public */}
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
 
           {/* Protected — wrapped in AppLayout (sidebar + topbar) */}
           <Route element={<ProtectedRoute />}>

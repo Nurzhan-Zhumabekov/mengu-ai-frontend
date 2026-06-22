@@ -65,8 +65,8 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
   return (
     <div className="flex flex-col items-center justify-center py-16 text-center">
       <div className="text-magenta-500 mb-4">{icon}</div>
-      <h3 className="text-sm font-medium text-gray-900 mb-1">{title}</h3>
-      {description && <p className="text-sm text-gray-500 mb-4">{description}</p>}
+      <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">{title}</h3>
+      {description && <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{description}</p>}
       {action}
     </div>
   )
@@ -86,7 +86,7 @@ export function Card({ children, className, title, action }: CardProps) {
     <div className={cn('card', className)}>
       {(title || action) && (
         <div className="flex items-center justify-between mb-3.5">
-          {title && <h2 className="text-[13px] font-medium text-gray-900">{title}</h2>}
+          {title && <h2 className="text-[13px] font-medium text-gray-900 dark:text-gray-100">{title}</h2>}
           {action}
         </div>
       )}
