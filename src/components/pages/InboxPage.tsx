@@ -141,18 +141,18 @@ export function InboxPage() {
                       : 'hover:bg-gray-50 dark:hover:bg-navy-800'
                   }`}
                 >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <span className="text-[13px] font-medium text-gray-900 dark:text-gray-100 truncate">
-                        {event.metadata.sender?.split('@')[0] ?? 'Unknown'}
-                      </span>
-                      <span className="text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0 ml-2">
-                        {timeAgo(event.created_at)}
-                      </span>
-                    </div>
-                    <div className="text-xs text-gray-600 dark:text-gray-400 truncate mb-1">
-                      {event.metadata.subject}
-                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="text-[13px] font-medium text-gray-900 dark:text-gray-100 truncate">
+                          {event.sender?.split('@')[0] ?? 'Unknown'}
+                        </span>
+                        <span className="text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0 ml-2">
+                          {timeAgo(event.created_at)}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400 truncate mb-1">
+                        {event.subject}
+                      </div>
                     <div className="flex items-center gap-2">
                       <span className={eventStatusClass(event.status)}>
                         {event.status}

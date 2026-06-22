@@ -118,8 +118,8 @@ export function CalendarPage() {
             events.map((event) => (
               <CalendarEventCard
                 key={event.id}
-                subject={event.metadata.subject ?? 'No subject'}
-                sender={event.metadata.sender ?? 'Unknown'}
+                subject={event.subject ?? 'No subject'}
+                sender={event.sender ?? 'Unknown'}
                 createdAt={event.created_at}
                 isSelected={selectedEventId === event.id}
                 onSelect={() => setSelectedEventId(selectedEventId === event.id ? null : event.id)}

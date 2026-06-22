@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Calendar, AlertCircle, User, X } from 'lucide-react'
+import { DndContext, DragOverlay, closestCorners, PointerSensor, useSensor, useSensors, type DragStartEvent, type DragEndEvent } from '@dnd-kit/core'
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { Plus, Calendar, AlertCircle, User, X, GripVertical } from 'lucide-react'
 import { Topbar } from '@/components/layout/Sidebar'
 import { Spinner } from '@/components/ui'
 import { toast } from '@/components/ui/toast'
@@ -11,16 +14,18 @@ import { formatDue, isOverdue, taskStatusLabel, isDueSoon, LIVE_POLL_INTERVAL_MS
 import type { Task, TaskStatus } from '@/types'
 
 const COLUMNS: { status: TaskStatus; label: string; color: string }[] = [
-  { status: 'new',         label: 'New',          color: 'bg-gray-400' },
-  { status: 'in_progress', label: 'In Progress',   color: 'bg-blue-400' },
-  { status: 'done',        label: 'Done',          color: 'bg-emerald-400' },
-  { status: 'cancelled',   label: 'Cancelled',      color: 'bg-red-400' },
+  { status: 'pending',      label: 'Pending',       color: 'bg-gray-400' },
+  { status: 'in_progress',  label: 'In Progress',   color: 'bg-blue-400' },
+  { status: 'completed',    label: 'Completed',     color: 'bg-emerald-400' },
+  { status: 'cancelled',    label: 'Cancelled',     color: 'bg-red-400' },
 ]
 
 interface NewTaskForm {
   title: string
   description: string
   due_date: string
+  assignee_id: string
+  priority: 'low' | 'medium' | 'high' | 'critical'
 }
 
 export function TasksPage() {
@@ -28,9 +33,14 @@ export function TasksPage() {
   const [overdueOnly, setOverdueOnly] = useState(false)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
   const [showNewTask, setShowNewTask] = useState(false)
-  const [form, setForm] = useState<NewTaskForm>({ title: '', description: '', due_date: '' })
+  const [form, setForm] = useState<NewTaskForm>({ title: '', description: '', due_date: '', assignee_id: '', priority: 'medium' })
+  const [activeTask, setActiveTask] = useState<Task | null>(null)
   const { user } = useAuthStore()
   const queryClient = useQueryClient()
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
+  )
 
   const { data, isLoading } = useQuery({
     queryKey: ['tasks'],
@@ -49,7 +59,7 @@ export function TasksPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] })
       setShowNewTask(false)
-      setForm({ title: '', description: '', due_date: '' })
+      setForm({ title: '', description: '', due_date: '', assignee_id: '', priority: 'medium' })
       toast('Task created successfully', 'success')
     },
     onError: () => {
@@ -70,12 +80,32 @@ export function TasksPage() {
     return filtered.filter((t) => t.status === status)
   }
 
+  function handleDragStart(event: DragStartEvent) {
+    const task = tasks.find((t) => t.id === event.active.id)
+    if (task) setActiveTask(task)
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    setActiveTask(null)
+    const { active, over } = event
+    if (!over) return
+
+    const taskId = active.id as string
+    const task = tasks.find((t) => t.id === taskId)
+    if (!task) return
+
+    const targetColumn = COLUMNS.find((c) => c.status === over.id)
+    if (targetColumn && targetColumn.status !== task.status) {
+      updateMutation.mutate({ id: taskId, patch: { status: targetColumn.status } })
+    }
+  }
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <Topbar
         title="Tasks"
         actions={
-          <button onClick={() => { setForm({ title: '', description: '', due_date: '' }); setShowNewTask(true) }} className="btn-primary">
+          <button onClick={() => { setForm({ title: '', description: '', due_date: '', assignee_id: '', priority: 'medium' }); setShowNewTask(true) }} className="btn-primary">
             <Plus size={14} /> New Task
           </button>
         }
@@ -118,43 +148,58 @@ export function TasksPage() {
         {isLoading ? (
           <div className="flex justify-center pt-16"><Spinner /></div>
         ) : (
-          <div className="grid grid-cols-4 gap-3 h-full">
-            {COLUMNS.map(({ status, label, color }) => {
-              const colTasks = tasksByStatus(status)
-              return (
-                <div
-                  key={status}
-                  className="flex flex-col bg-gray-50 dark:bg-navy-900 rounded-xl border border-gray-200 dark:border-navy-600 overflow-hidden"
-                >
-                  <div className="flex items-center justify-between px-3 py-2.5 bg-white dark:bg-navy-800 border-b border-gray-100 dark:border-navy-600">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-2 h-2 rounded-full ${color}`} />
-                      <span className="text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wide">
-                        {label}
+          <DndContext sensors={sensors} collisionDetection={closestCorners} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+            <div className="grid grid-cols-4 gap-3 h-full">
+              {COLUMNS.map(({ status, label, color }) => {
+                const colTasks = tasksByStatus(status)
+                return (
+                  <div
+                    key={status}
+                    className="flex flex-col bg-gray-50 dark:bg-navy-900 rounded-xl border border-gray-200 dark:border-navy-600 overflow-hidden"
+                  >
+                    <div className="flex items-center justify-between px-3 py-2.5 bg-white dark:bg-navy-800 border-b border-gray-100 dark:border-navy-600">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${color}`} />
+                        <span className="text-xs font-medium text-gray-600 dark:text-gray-300 uppercase tracking-wide">
+                          {label}
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-navy-700 px-1.5 py-0.5 rounded-full">
+                        {colTasks.length}
                       </span>
                     </div>
-                    <span className="text-xs text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-navy-700 px-1.5 py-0.5 rounded-full">
-                      {colTasks.length}
-                    </span>
+                    <SortableContext items={colTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+                      <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                        {colTasks.length === 0 ? (
+                          <div className="text-center py-6 text-xs text-gray-400 dark:text-gray-500">No tasks</div>
+                        ) : (
+                          colTasks.map((task) => (
+                            <SortableTaskCard
+                              key={task.id}
+                              task={task}
+                              onClick={() => setSelectedTask(task)}
+                              selected={selectedTask?.id === task.id}
+                            />
+                          ))
+                        )}
+                      </div>
+                    </SortableContext>
                   </div>
-                  <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                    {colTasks.length === 0 ? (
-                      <div className="text-center py-6 text-xs text-gray-400 dark:text-gray-500">No tasks</div>
-                    ) : (
-                      colTasks.map((task) => (
-                        <TaskCard
-                          key={task.id}
-                          task={task}
-                          onClick={() => setSelectedTask(task)}
-                          selected={selectedTask?.id === task.id}
-                        />
-                      ))
-                    )}
-                  </div>
+                )
+              })}
+            </div>
+
+            <DragOverlay>
+              {activeTask ? (
+                <div className="kanban-card opacity-90 shadow-xl bg-white dark:bg-navy-800 border border-magenta-400">
+                  <div className="text-[13px] font-medium text-gray-900 dark:text-gray-100">{activeTask.title}</div>
+                  {activeTask.description && (
+                    <div className="text-[11px] text-gray-500 mt-1">{activeTask.description}</div>
+                  )}
                 </div>
-              )
-            })}
-          </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         )}
       </div>
 
@@ -179,72 +224,145 @@ export function TasksPage() {
                 <X size={18} />
               </button>
             </div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault()
-                if (!form.title.trim()) return
-                createMutation.mutate({
-                  title: form.title,
-                  description: form.description || undefined,
-                  // <input type="date"> gives "YYYY-MM-DD" — the backend's
-                  // Create handler strictly requires time.RFC3339 (see
-                  // internal/tasks/handler.go), so we convert to midnight
-                  // UTC on that date rather than sending the bare date string.
-                  due_date: form.due_date ? `${form.due_date}T00:00:00Z` : undefined,
-                })
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Title *</label>
-                <input
-                  value={form.title}
-                  onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-                  className="input-field"
-                  placeholder="What needs to be done?"
-                  autoFocus
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Description</label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  className="input-field resize-none"
-                  rows={3}
-                  placeholder="Optional details..."
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Due Date</label>
-                <input
-                  type="date"
-                  value={form.due_date}
-                  onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))}
-                  className="input-field"
-                />
-              </div>
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="submit"
-                  disabled={createMutation.isPending || !form.title.trim()}
-                  className="btn-primary flex-1 justify-center"
-                >
-                  {createMutation.isPending ? <Spinner className="text-white w-4 h-4" /> : null}
-                  Create Task
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowNewTask(false)}
-                  className="btn-secondary flex-1 justify-center"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault()
+                  if (!form.title.trim()) return
+                  createMutation.mutate({
+                    title: form.title,
+                    description: form.description || undefined,
+                    assignee_id: form.assignee_id || undefined,
+                    due_date: form.due_date ? `${form.due_date}T00:00:00Z` : undefined,
+                  })
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Title *</label>
+                  <input
+                    value={form.title}
+                    onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                    className="input-field"
+                    placeholder="What needs to be done?"
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Description</label>
+                  <textarea
+                    value={form.description}
+                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                    className="input-field resize-none"
+                    rows={3}
+                    placeholder="Optional details..."
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Assignee ID</label>
+                    <input
+                      value={form.assignee_id}
+                      onChange={(e) => setForm((f) => ({ ...f, assignee_id: e.target.value }))}
+                      className="input-field"
+                      placeholder="User ID (optional)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Priority</label>
+                    <select
+                      value={form.priority}
+                      onChange={(e) => setForm((f) => ({ ...f, priority: e.target.value as 'low' | 'medium' | 'high' | 'critical' }))}
+                      className="input-field"
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                      <option value="critical">Critical</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1.5">Due Date</label>
+                  <input
+                    type="date"
+                    value={form.due_date}
+                    onChange={(e) => setForm((f) => ({ ...f, due_date: e.target.value }))}
+                    className="input-field"
+                  />
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="submit"
+                    disabled={createMutation.isPending || !form.title.trim()}
+                    className="btn-primary flex-1 justify-center"
+                  >
+                    {createMutation.isPending ? <Spinner className="text-white w-4 h-4" /> : null}
+                    Create Task
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowNewTask(false)}
+                    className="btn-secondary flex-1 justify-center"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function SortableTaskCard({ task, onClick, selected }: TaskCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  }
+
+  const overdue = isOverdue(task.due_date) && task.status !== 'completed' && task.status !== 'cancelled'
+  const dueSoon = isDueSoon(task.due_date)
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`kanban-card ${
+        selected ? 'border-magenta-400 shadow-sm' : ''
+      } ${overdue ? 'border-l-4 border-l-red-400' : dueSoon ? 'border-l-4 border-l-amber-400' : ''}`}
+    >
+      <div className="flex items-start gap-1">
+        <button {...attributes} {...listeners} className="mt-0.5 text-gray-300 hover:text-gray-500 dark:text-gray-600 dark:hover:text-gray-400 cursor-grab active:cursor-grabbing flex-shrink-0">
+          <GripVertical size={14} />
+        </button>
+        <div className="flex-1 min-w-0" onClick={onClick}>
+          <div className="text-[13px] font-medium text-gray-900 dark:text-gray-100 leading-snug mb-2">
+            {task.title}
+          </div>
+          {task.description && (
+            <div className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed mb-2 line-clamp-2">
+              {task.description}
+            </div>
+          )}
+          <div className="flex items-center justify-between mt-2">
+            <div className={`flex items-center gap-1 text-[11px] ${overdue ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'}`}>
+              {overdue && <AlertCircle size={11} />}
+              <Calendar size={11} />
+              {formatDue(task.due_date)}
+            </div>
+            {task.assignee_id && (
+              <div className="flex items-center gap-1 text-[11px] text-gray-400 dark:text-gray-500">
+                <User size={11} />
+                <span>Assigned</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -255,44 +373,6 @@ interface TaskCardProps {
   selected: boolean
 }
 
-function TaskCard({ task, onClick, selected }: TaskCardProps) {
-  const overdue = isOverdue(task.due_date) && task.status !== 'done' && task.status !== 'cancelled'
-  const dueSoon = isDueSoon(task.due_date)
-
-  return (
-    <div
-      onClick={onClick}
-      className={`kanban-card ${
-        selected ? 'border-magenta-400 shadow-sm' : ''
-      } ${overdue ? 'border-l-4 border-l-red-400' : dueSoon ? 'border-l-4 border-l-amber-400' : ''}`}
-    >
-      <div className="text-[13px] font-medium text-gray-900 dark:text-gray-100 leading-snug mb-2">
-        {task.title}
-      </div>
-
-      {task.description && (
-        <div className="text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed mb-2 line-clamp-2">
-          {task.description}
-        </div>
-      )}
-
-      <div className="flex items-center justify-between mt-2">
-        <div className={`flex items-center gap-1 text-[11px] ${overdue ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'}`}>
-          {overdue && <AlertCircle size={11} />}
-          <Calendar size={11} />
-          {formatDue(task.due_date)}
-        </div>
-        {task.assignee_id && (
-          <div className="flex items-center gap-1 text-[11px] text-gray-400 dark:text-gray-500">
-            <User size={11} />
-            <span>Assigned</span>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
 interface TaskDrawerProps {
   task: Task
   onClose: () => void
@@ -300,7 +380,7 @@ interface TaskDrawerProps {
 }
 
 function TaskDrawer({ task, onClose, onUpdate }: TaskDrawerProps) {
-  const overdue = isOverdue(task.due_date) && task.status !== 'done' && task.status !== 'cancelled'
+  const overdue = isOverdue(task.due_date) && task.status !== 'completed' && task.status !== 'cancelled'
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">

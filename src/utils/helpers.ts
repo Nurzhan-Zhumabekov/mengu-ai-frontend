@@ -47,9 +47,9 @@ export function formatDue(date?: string | null): string {
 
 export function taskStatusLabel(s: TaskStatus): string {
   return {
-    new: 'New',
+    pending: 'Pending',
     in_progress: 'In Progress',
-    done: 'Done',
+    completed: 'Completed',
     cancelled: 'Cancelled',
   }[s]
 }

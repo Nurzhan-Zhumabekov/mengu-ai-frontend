@@ -1,11 +1,14 @@
+import { useState, useRef, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   LayoutDashboard, Inbox, CheckSquare, FileText,
-  Calendar, Lightbulb, BarChart2, Settings,
-  Zap, LogOut, Bell, ChevronDown,
+  Calendar, Settings,
+  Zap, LogOut, Bell, ChevronDown, CheckCheck, Info, AlertTriangle, AlertCircle, CheckCircle,
 } from 'lucide-react'
-import { useAuthStore } from '@/store'
-import { cn } from '@/utils/helpers'
+import { useAuthStore, useNotificationStore } from '@/store'
+import { cn, timeAgo, LIVE_POLL_INTERVAL_MS } from '@/utils/helpers'
+import { eventsService, tasksService } from '@/services'
 
 interface NavItem {
   to: string
@@ -14,40 +17,46 @@ interface NavItem {
   badge?: number
 }
 
-const NAV: { section: string; items: NavItem[] }[] = [
-  {
-    section: 'Main',
-    items: [
-      { to: '/',        icon: LayoutDashboard, label: 'Dashboard',   badge: 7 },
-      { to: '/inbox',   icon: Inbox,           label: 'Inbox',  badge: 12 },
-    ],
-  },
-  {
-    section: 'Work',
-    items: [
-      { to: '/tasks',     icon: CheckSquare, label: 'Tasks' },
-      { to: '/documents', icon: FileText,    label: 'Documents' },
-      { to: '/calendar',  icon: Calendar,    label: 'Calendar' },
-    ],
-  },
-  {
-    section: 'Analytics',
-    items: [
-      { to: '/insights',  icon: Lightbulb, label: 'AI Insights' },
-      { to: '/analytics', icon: BarChart2, label: 'Analytics' },
-    ],
-  },
-  {
-    section: 'System',
-    items: [
-      { to: '/settings', icon: Settings, label: 'Settings' },
-    ],
-  },
-]
-
 export function Sidebar() {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
+
+  const { data: eventsData } = useQuery({
+    queryKey: ['events', 'all'],
+    queryFn: () => eventsService.getAll(),
+    refetchInterval: LIVE_POLL_INTERVAL_MS,
+  })
+  const { data: tasksData } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: () => tasksService.getAll(),
+    refetchInterval: LIVE_POLL_INTERVAL_MS,
+  })
+  const newEvents = eventsData?.data.filter((e) => e.status === 'new').length ?? 0
+  const activeTasks = tasksData?.data.filter((t) => t.status !== 'completed' && t.status !== 'cancelled').length ?? 0
+
+  const NAV: { section: string; items: NavItem[] }[] = [
+    {
+      section: 'Main',
+      items: [
+        { to: '/',        icon: LayoutDashboard, label: 'Dashboard',   badge: activeTasks },
+        { to: '/inbox',   icon: Inbox,           label: 'Inbox',       badge: newEvents },
+      ],
+    },
+    {
+      section: 'Work',
+      items: [
+        { to: '/tasks',     icon: CheckSquare, label: 'Tasks' },
+        { to: '/documents', icon: FileText,    label: 'Documents' },
+        { to: '/calendar',  icon: Calendar,    label: 'Calendar' },
+      ],
+    },
+    {
+      section: 'System',
+      items: [
+        { to: '/settings', icon: Settings, label: 'Settings' },
+      ],
+    },
+  ]
 
   function handleLogout() {
     logout()
@@ -137,6 +146,27 @@ interface TopbarProps {
 }
 
 export function Topbar({ title, actions }: TopbarProps) {
+  const [notifOpen, setNotifOpen] = useState(false)
+  const notifRef = useRef<HTMLDivElement>(null)
+  const { notifications, unreadCount, markRead, markAllRead } = useNotificationStore()
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
+        setNotifOpen(false)
+      }
+    }
+    if (notifOpen) document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [notifOpen])
+
+  const NOTIF_ICONS: Record<string, React.ReactNode> = {
+    info: <Info size={14} className="text-blue-500" />,
+    warning: <AlertTriangle size={14} className="text-amber-500" />,
+    error: <AlertCircle size={14} className="text-red-500" />,
+    success: <CheckCircle size={14} className="text-emerald-500" />,
+  }
+
   return (
     <header className="h-14 flex items-center px-6 bg-white dark:bg-navy-800 border-b border-gray-100 dark:border-navy-600 gap-4 flex-shrink-0">
       <h1 className="text-base font-medium text-gray-900 dark:text-gray-100">{title}</h1>
@@ -146,10 +176,52 @@ export function Topbar({ title, actions }: TopbarProps) {
           <span className="text-gray-400">Search...</span>
           <kbd className="ml-2 text-[11px] text-gray-400 bg-white dark:bg-navy-800 border border-gray-200 dark:border-navy-600 rounded px-1.5 py-0.5">⌘K</kbd>
         </div>
-        <button className="relative w-8 h-8 flex items-center justify-center border border-gray-200 dark:border-navy-600 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-navy-700 transition-colors">
-          <Bell size={16} />
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-magenta-500 rounded-full" />
-        </button>
+        <div ref={notifRef} className="relative">
+          <button
+            onClick={() => setNotifOpen(!notifOpen)}
+            className="relative w-8 h-8 flex items-center justify-center border border-gray-200 dark:border-navy-600 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-navy-700 transition-colors"
+          >
+            <Bell size={16} />
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-magenta-500 text-white text-[9px] font-medium rounded-full flex items-center justify-center">
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {notifOpen && (
+            <div className="absolute right-0 top-full mt-2 w-80 bg-white dark:bg-navy-800 border border-gray-200 dark:border-navy-600 rounded-xl shadow-xl z-50 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-navy-600">
+                <span className="text-xs font-medium text-gray-700 dark:text-gray-300">Notifications</span>
+                {unreadCount > 0 && (
+                  <button onClick={markAllRead} className="text-[11px] text-magenta-500 hover:underline flex items-center gap-1">
+                    <CheckCheck size={12} /> Mark all read
+                  </button>
+                )}
+              </div>
+              <div className="max-h-72 overflow-y-auto">
+                {notifications.length === 0 ? (
+                  <div className="text-center py-8 text-xs text-gray-400 dark:text-gray-500">No notifications yet</div>
+                ) : (
+                  notifications.slice(0, 20).map((n) => (
+                    <div
+                      key={n.id}
+                      onClick={() => markRead(n.id)}
+                      className={`flex items-start gap-2.5 px-4 py-3 border-b border-gray-50 dark:border-navy-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-navy-700 transition-colors ${n.read ? 'opacity-60' : ''}`}
+                    >
+                      <div className="mt-0.5 flex-shrink-0">{NOTIF_ICONS[n.type] ?? <Info size={14} className="text-blue-500" />}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-gray-800 dark:text-gray-200">{n.title}</div>
+                        <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 line-clamp-2">{n.description}</div>
+                        <div className="text-[10px] text-gray-400 dark:text-gray-500 mt-1">{timeAgo(n.created_at)}</div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   )

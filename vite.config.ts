@@ -13,7 +13,7 @@ export default defineConfig({
     port: 5173, // matches backend's FRONTEND_URL default in .env.example — required for CORS and OAuth redirect to work
     proxy: {
       '/api': {
-        target: 'http://localhost:8080', // real backend port, confirmed in cmd/server/main.go and docker-compose.yml
+        target: 'https://mengu-backend-production.up.railway.app',
         changeOrigin: true,
       },
       // No /ws proxy: the real backend has no WebSocket endpoint at all

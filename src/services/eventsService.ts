@@ -1,19 +1,23 @@
 import { httpClient } from './client'
 import type {
-  IncomingEvent, FullEvent, AIAnalysis, ActionLog,
+  EventListItem, FullEvent, AIAnalysis, ActionLog,
   DocumentAnalysisListItem, DraftListItem, CalendarEventItem,
   PaginatedResponse, EventFilters,
 } from '@/types'
 
 export const eventsService = {
-  async getAll(filters?: EventFilters): Promise<PaginatedResponse<IncomingEvent>> {
-    const { data } = await httpClient.get<PaginatedResponse<IncomingEvent>>('/events', {
-      params: { status: filters?.status === 'all' ? undefined : filters?.status, page: filters?.page, per_page: filters?.per_page },
+  /** GET /events returns flat list items: {id, source, subject, sender, status, created_at} */
+  async getAll(filters?: EventFilters): Promise<PaginatedResponse<EventListItem>> {
+    const { data } = await httpClient.get<PaginatedResponse<EventListItem>>('/events', {
+      params: {
+        status: filters?.status === 'all' ? undefined : filters?.status,
+        page: filters?.page,
+        per_page: filters?.per_page,
+      },
     })
     return data
   },
 
-  /** Returns {event, analysis?, action_logs?} — analysis/action_logs may be entirely absent. */
   async getById(id: string): Promise<FullEvent> {
     const { data } = await httpClient.get<FullEvent>(`/events/${id}`)
     return data
@@ -34,14 +38,15 @@ export const eventsService = {
     return data
   },
 
-  /** risks here is a NUMBER (count), not the actual risk strings — see types/index.ts. */
   async getDocuments(id: string): Promise<PaginatedResponse<DocumentAnalysisListItem>> {
     const { data } = await httpClient.get<PaginatedResponse<DocumentAnalysisListItem>>(`/events/${id}/documents`)
     return data
   },
 
-  async getDrafts(id: string): Promise<PaginatedResponse<DraftListItem>> {
-    const { data } = await httpClient.get<PaginatedResponse<DraftListItem>>(`/events/${id}/drafts`)
+  async getDrafts(id: string, filters?: { status?: string }): Promise<PaginatedResponse<DraftListItem>> {
+    const { data } = await httpClient.get<PaginatedResponse<DraftListItem>>(`/events/${id}/drafts`, {
+      params: { status: filters?.status },
+    })
     return data
   },
 
